@@ -10,8 +10,9 @@ optional combat/medical features. Existing feature defaults are preserved; safer
 medic healing is off by default and ACE drag requires ACE to be loaded.
 BBB does not supply ACA's commander, bases, logistics, orders or vehicle stall decisions.
 
-This is a development extraction, not a published Workshop release. Installed
-Conflict/GM and multiplayer acceptance remain outstanding.
+Published on the Arma Reforger Workshop (current version 0.1.1). Downloaded
+scripts/configs/dependencies have been checked against the prepared source. Installed
+Conflict/GM gameplay and multiplayer acceptance remain outstanding.
 
 Place this checkout beside ArmaCommanderReforger in Workbench/addons, then open
 addon.gproj in Workbench. For BBB alone, load addon BBB0261015000001 and a vanilla
