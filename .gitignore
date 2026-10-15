@@ -1,0 +1,7 @@
+.local-*/
+.bbb-results/
+dist/
+resourceDatabase.rdb
+.cache/
+*.bak
+__pycache__/

@@ -1,0 +1,226 @@
+{
+  "sourceRepository": "propst-design/ArmaCommanderReforger",
+  "sourceCommit": "4a11925",
+  "files": [
+    {
+      "source": "Scripts/Game/BBB/BBB_Aim.c",
+      "destination": "Scripts/Game/BBB/BBB_Aim.c",
+      "sha256": "d271c515074168a1232cec28f022b9f277837848324caaf02e714521ef6ca883"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_AimTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_AimTest.c",
+      "sha256": "3c79276702e9aa842c4ef27033eefada650f725efa52c2124e482864949879a9"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Armour.c",
+      "destination": "Scripts/Game/BBB/BBB_Armour.c",
+      "sha256": "c26d9885007e0a8fbdfc3698cc0057754c8a0c00c260333339a44573a675fec4"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_ArmourTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_ArmourTest.c",
+      "sha256": "957037b44cf536dd6858df759c0ce965c32d9b6571b5df1ef4cfe8bb060a7bec"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Bios.c",
+      "destination": "Scripts/Game/BBB/BBB_Bios.c",
+      "sha256": "1449fb5a25de6592778bf6f7a9e6213fdd6fcc8806603027aacf1662bb64ba9b"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Combat.c",
+      "destination": "Scripts/Game/BBB/BBB_Combat.c",
+      "sha256": "c7dbb9dad6caf18920744711de5608041b6006eb35451523a193f3910c9346d1"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_CombatTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_CombatTest.c",
+      "sha256": "865c18f415dfed0535960b616b9aec1d45012200e93abd8ead1245a5ba37e87d"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Core.c",
+      "destination": "Scripts/Game/BBB/BBB_Core.c",
+      "sha256": "fadbb0fbe8831432bf58ecdab7158a76397ecacff2d597887ce79043a05a4cf9"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Drag.c",
+      "destination": "Scripts/Game/BBB/BBB_Drag.c",
+      "sha256": "a7bea77b5181ee1836e600ccc2c55c7f5fc15bf301446da90f173db91dcb7a6b"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Engagement.c",
+      "destination": "Scripts/Game/BBB/BBB_Engagement.c",
+      "sha256": "419ab1eda124e25b83074ed2f68377671602811baed8896302783a47e21cf4f8"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_EngagementTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_EngagementTest.c",
+      "sha256": "9c53fe76c85a38bc4ae3c922ae074d7601fe89714306ea7f6aa2872b69986d61"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_FireManeuver.c",
+      "destination": "Scripts/Game/BBB/BBB_FireManeuver.c",
+      "sha256": "abfea76a4f8643d039733523b8e2b162ce77a73c397449678374db17eb198862"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_FireManeuverPerfTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_FireManeuverPerfTest.c",
+      "sha256": "8507030b9f2805bebc6259b3ebebca1b1c58d8a4e7c2d0b3bcd09d078c6a1181"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_FireManeuverTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_FireManeuverTest.c",
+      "sha256": "4545265bc0eebd1aded53a7882af6d0085d3bb7f6d29fcf7ef879d86da270a77"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_GrenadierTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_GrenadierTest.c",
+      "sha256": "ee23d47e7d2aae0ee018ac8b0177dd9654568d8df7e4d07c4043b003ad8bde1f"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Gunner.c",
+      "destination": "Scripts/Game/BBB/BBB_Gunner.c",
+      "sha256": "f8cbaf7ecbee01039b3f3297ed78820b034d3d7cce510b11de98f48867a4d6cb"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_GunnerTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_GunnerTest.c",
+      "sha256": "45799286a36a6655b87ed6ffb36517e4ed8e77dfc8f1ea4e3ca988cb006d29b5"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_HorizonScan.c",
+      "destination": "Scripts/Game/BBB/BBB_HorizonScan.c",
+      "sha256": "587766702b920410e21bb70d83d40358451760c2b796ae673c467a2b5b96966c"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Launchers.c",
+      "destination": "Scripts/Game/BBB/BBB_Launchers.c",
+      "sha256": "c2a7eac4279a30275857e363da9e7b3d1e08216e4b54481b90983ada42f9b750"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_LongRangeTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_LongRangeTest.c",
+      "sha256": "2196672111920c8483e772ee51d358d63d08034c9a8e571b6337e1974a54ecfc"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_LookTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_LookTest.c",
+      "sha256": "8d913f3ba438bb597a62af618f8f7fe6b2afe1dddec72f0b58a469c3b462d961"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Medic.c",
+      "destination": "Scripts/Game/BBB/BBB_Medic.c",
+      "sha256": "97a3f20a33e41fc451b5cc61d5e7c33fd7a3aa07e7f3a28b8f14403b1cf2b39b"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_MedicTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_MedicTest.c",
+      "sha256": "2de02188a3f033aa32c97e9f14f6e0df88ef4d2bf194bcb6d43e6df79b3e68e3"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_OrderIntent.c",
+      "destination": "Scripts/Game/BBB/BBB_OrderIntent.c",
+      "sha256": "21c764b0c7529405d4042e2b1bbe0f653fb0166fde17d712389ea80200c56c7f"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Perf.c",
+      "destination": "Scripts/Game/BBB/BBB_Perf.c",
+      "sha256": "07dc14e2516bf2c5e0587bb898b742c848b0636c5e93a492720e65412f08a6a9"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_RelaxedMarch.c",
+      "destination": "Scripts/Game/BBB/BBB_RelaxedMarch.c",
+      "sha256": "afeb13d1f1042f563015bfaf2a0a2c3281c822458d95c097461b7ccfc07e9fc4"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_RelaxedMarchTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_RelaxedMarchTest.c",
+      "sha256": "5f63e9b42ab4f04ccad9d85d411c83e80c0807f8dc929abe26c7eab0c7564d7b"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Roads.c",
+      "destination": "Scripts/Game/BBB/BBB_Roads.c",
+      "sha256": "d55f061f92a57c2273d74f47f4e8d01ad6cf9c9145378b07d62b23a24f58fe07"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_SkySuppressionTest.c",
+      "destination": "Scripts/Game/BBB_Tests/BBB_SkySuppressionTest.c",
+      "sha256": "80508a9bf1d9da51173e085e037552206feabe23280dafae2143a3a1a61984ba"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_SuppressionSafety.c",
+      "destination": "Scripts/Game/BBB/BBB_SuppressionSafety.c",
+      "sha256": "aa4f14395cd7c7bc8897b1582a6a5a286a6b8e77c9f9409cd4203a0d5161a3cc"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Terrain.c",
+      "destination": "Scripts/Game/BBB/BBB_Terrain.c",
+      "sha256": "bb0172775cf57c1e8bcce5c00cc6770e6addc47efe356c1a76055e2cb0e4e207"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Transport.c",
+      "destination": "Scripts/Game/BBB/BBB_Transport.c",
+      "sha256": "a34d52800f4ecdb191abba425be7faed9a1d8ba9a8821f85eb9afbae7a6cc63c"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Unstick.c",
+      "destination": "Scripts/Game/BBB/BBB_Unstick.c",
+      "sha256": "37516531ed9a8215cc14750636f8b8bbb389dd57d3ae418f7a8bea8b02f7f772"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_Vanilla.c",
+      "destination": "Scripts/Game/BBB/BBB_Vanilla.c",
+      "sha256": "b5178fa62533765242d2bb65d2f8f8849fdc9d2258aea2a3618db234a8feca4a"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_VehicleHelpers.c",
+      "destination": "Scripts/Game/BBB/BBB_VehicleHelpers.c",
+      "sha256": "7c4854bd70955fb115fdcb6fd69f072239d09dabaa7eedbb3c513482d86f3ae8"
+    },
+    {
+      "source": "Scripts/Game/BBB/BBB_WeaponReady.c",
+      "destination": "Scripts/Game/BBB/BBB_WeaponReady.c",
+      "sha256": "0098db52276b5649e4e60d91ce875bcbe952553497fe477ecd9d566e4067054b"
+    },
+    {
+      "source": "Configs/BBB/BBB_Bios.conf",
+      "destination": "Configs/BBB/BBB_Bios.conf",
+      "sha256": "7cd2c46dc32e142c559caad1f6d3785d175d16105f7b092df150b53f7f125fc1"
+    },
+    {
+      "source": "Configs/BBB/BBB_Bios.conf.meta",
+      "destination": "Configs/BBB/BBB_Bios.conf.meta",
+      "sha256": "f51cc5b25f8f8f9178f3372a2d8c6a0f9d239d5aca7ed4b9813b41ef396a99b2"
+    },
+    {
+      "source": "Configs/BBB/BBB_CivBios.conf",
+      "destination": "Configs/BBB/BBB_CivBios.conf",
+      "sha256": "b00e301c12fb2da6c32d38fa14ed33e426f68ff74adbaefd0f5a033d87f730d3"
+    },
+    {
+      "source": "Configs/BBB/BBB_CivBios.conf.meta",
+      "destination": "Configs/BBB/BBB_CivBios.conf.meta",
+      "sha256": "1528ff119e384f2cf146349071b79b02f11a8b2dcb12d69db8f1fbe035317453"
+    },
+    {
+      "source": "Worlds/BBB_TestArland.ent",
+      "destination": "Worlds/BBB_TestArland.ent",
+      "sha256": "0f89d1af2d744a27dec4921589717368851c8d32594ccb972f783b71d87ea4e8"
+    },
+    {
+      "source": "Worlds/BBB_TestArland.ent.meta",
+      "destination": "Worlds/BBB_TestArland.ent.meta",
+      "sha256": "e1bcaed615339ee7f57cf69f32901b265b3c4a03f563adad65d035e509c3fd07"
+    },
+    {
+      "source": "Missions/BBB_TestArland.conf",
+      "destination": "Missions/BBB_TestArland.conf",
+      "sha256": "0fdc6650a64ddfc417e87df47ec6257b2327a9cfa69dacb0d5055be7182a9b62"
+    },
+    {
+      "source": "Missions/BBB_TestArland.conf.meta",
+      "destination": "Missions/BBB_TestArland.conf.meta",
+      "sha256": "37e362eec3ddba0e4ff1faafbfe7e336a2a4848dbe4bf28c3bc54bafb6f53c45"
+    }
+  ]
+}
