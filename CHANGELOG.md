@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-10-15
+
+- Prevent repeated AI fire-selector requests when the weapon already uses the best available fallback mode.
+
 ## 0.1.2 — 2026-10-15
 
 - Medics and teammates now deploy smoke cover toward enemy threats by default before advancing to treat an exposed casualty, waiting briefly for the smoke cloud to bloom.
