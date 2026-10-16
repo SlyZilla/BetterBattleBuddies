@@ -10,6 +10,11 @@ if (!$AddonRoot) { $AddonRoot = Split-Path $PSScriptRoot -Parent }
 $AddonRoot = [IO.Path]::GetFullPath($AddonRoot)
 $project = Join-Path $AddonRoot 'addon.gproj'
 if (!(Test-Path -LiteralPath $project) -or (Get-Content -LiteralPath $project -Raw) -notmatch 'GUID "BBB0261015000001"') { throw 'Not a BBB addon root.' }
+$serverWait = 0
+while ((Get-Process ArmaReforgerServer -ErrorAction SilentlyContinue) -and $serverWait -lt 300) {
+ Start-Sleep -Milliseconds 400
+ $serverWait++
+}
 if (Get-Process ArmaReforgerServer -ErrorAction SilentlyContinue) { throw 'Another server holds port 2001; let it finish first.' }
 if (!$ServerPath) {
  $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
