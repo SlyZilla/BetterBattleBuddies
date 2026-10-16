@@ -16,25 +16,33 @@ class BBB_VehicleHelpers : Managed
  static const float STALL_SECONDS_FIGHTING = 25.0;
  static const float STALL_SECONDS_HELPLESS = 3.0;
  static const int UNSTICK_TRIES = 2;
+ static const float GUNNER_REPLACE_COOLDOWN_MS = 8000.0;
+ static const float GUNNER_FOOT_REACH_M = 8.0;
 
  protected ref array<IEntity> m_Found = {};
  protected ref map<IEntity, int> m_OnBed = new map<IEntity, int>();
  protected ref map<IEntity, vector> m_StallPos = new map<IEntity, vector>();
  protected ref map<IEntity, float> m_StallSince = new map<IEntity, float>();
  protected ref map<IEntity, int> m_Unsticks = new map<IEntity, int>();
+ static ref map<IEntity, float> s_mGunnerReplaceNext = new map<IEntity, float>();
  protected ref array<IEntity> m_Unsticking = {};
  protected ref BBB_VehicleHelpersUnstick m_UnstickListener;
 
  protected static bool s_bDoors = true;
  protected static bool s_bUnstick = true;
  protected static bool s_bTacticalDismount = true;
+ static bool s_bGunnerReplace = true;
+ static int s_iGunnerReplacements;
+ protected static ref array<IEntity> s_aReplacingVehicles = {};
 
  void BBB_VehicleHelpers()
  {
+  s_iGunnerReplacements = 0;
   string val;
   if (System.GetCLIParam("bbbDoors", val) && val == "0") s_bDoors = false;
   if (System.GetCLIParam("bbbUnstick", val) && val == "0") s_bUnstick = false;
   if (System.GetCLIParam("bbbTacticalDismount", val) && val == "0") s_bTacticalDismount = false;
+  if (System.GetCLIParam("bbbGunnerReplace", val) && val == "0") s_bGunnerReplace = false;
  }
 
  void Tick()
@@ -42,6 +50,7 @@ class BBB_VehicleHelpers : Managed
   array<SCR_AIGroup> groups = {};
   BBB.s_Hooks.GetGroups(groups);
   array<IEntity> handledVehicles = {};
+  array<IEntity> replacedVehicles = {};
   array<IEntity> watchedVehicles = {};
   foreach (SCR_AIGroup group : groups)
   {
@@ -49,6 +58,7 @@ class BBB_VehicleHelpers : Managed
    OpenGatesFor(group);
    GetOffBeds(group);
    CloseDoors(group, handledVehicles);
+   ReplaceGunnerFor(group, replacedVehicles);
    if (!BBB.s_Hooks.ManagesVehicleDriving(group))
    {
     CheckTacticalDismountFor(group);
@@ -275,26 +285,370 @@ class BBB_VehicleHelpers : Managed
   return count;
  }
 
+ static void GetVehicleCompartments(IEntity vehicle, array<BaseCompartmentSlot> slots, int filterType = -1)
+ {
+  slots.Clear();
+  if (!vehicle) return;
+  array<IEntity> entities = {vehicle};
+  IEntity child = vehicle.GetChildren();
+  while (child)
+  {
+   entities.Insert(child);
+   child = child.GetSibling();
+  }
+  foreach (IEntity ent : entities)
+  {
+   SCR_BaseCompartmentManagerComponent cm = SCR_BaseCompartmentManagerComponent.Cast(ent.FindComponent(SCR_BaseCompartmentManagerComponent));
+   if (!cm) continue;
+   array<BaseCompartmentSlot> cur = {};
+   cm.GetCompartments(cur);
+   foreach (BaseCompartmentSlot s : cur)
+   {
+    if (filterType < 0 || s.GetType() == filterType)
+     slots.Insert(s);
+   }
+  }
+ }
+
  static bool HasTurret(IEntity vehicle)
  {
   if (!vehicle) return false;
-  SCR_BaseCompartmentManagerComponent compartments = SCR_BaseCompartmentManagerComponent.Cast(vehicle.FindComponent(SCR_BaseCompartmentManagerComponent));
-  if (!compartments) return false;
   array<BaseCompartmentSlot> turrets = {};
-  compartments.GetCompartmentsOfType(turrets, ECompartmentType.TURRET);
+  GetVehicleCompartments(vehicle, turrets, ECompartmentType.TURRET);
   return !turrets.IsEmpty();
+ }
+
+ static bool IsAble(IEntity entity)
+ {
+  if (!BBB.IsAlive(entity)) return false;
+  ChimeraCharacter ch = ChimeraCharacter.Cast(entity);
+  if (!ch || !ch.GetCharacterController()) return false;
+  if (ch.GetCharacterController().IsUnconscious()) return false;
+  if (BBB_Drag.Unconscious(entity)) return false;
+  return true;
  }
 
  static bool HasGunner(IEntity vehicle)
  {
   if (!vehicle) return false;
+  array<BaseCompartmentSlot> turrets = {};
+  GetVehicleCompartments(vehicle, turrets, ECompartmentType.TURRET);
+  foreach (BaseCompartmentSlot slot : turrets)
+   if (IsAble(slot.GetOccupant())) return true;
+  return false;
+ }
+
+ // ---------------------------------------------------------------- turret gunner replacement
+
+ static TurretControllerComponent TurretControllerOf(BaseCompartmentSlot slot)
+ {
+  if (!slot) return null;
+  TurretControllerComponent controller = TurretControllerComponent.Cast(slot.GetController());
+  if (controller) return controller;
+  controller = slot.GetAttachedTurret();
+  if (controller) return controller;
+  IEntity owner = slot.GetOwner();
+  if (!owner) return null;
+  controller = TurretControllerComponent.Cast(owner.FindComponent(TurretControllerComponent));
+  if (controller) return controller;
+  string turretName = slot.GetAutoConnectTurret();
+  IEntity child = owner.GetChildren();
+  while (child)
+  {
+   TurretControllerComponent tc = TurretControllerComponent.Cast(child.FindComponent(TurretControllerComponent));
+   if (tc && (turretName.IsEmpty() || tc.GetUniqueName() == turretName))
+    return tc;
+   child = child.GetSibling();
+  }
+  return null;
+ }
+
+ static bool TurretHasAmmo(BaseCompartmentSlot slot)
+ {
+  if (!slot || slot.GetType() != ECompartmentType.TURRET) return false;
+  if (slot.IsGetInLocked()) return false;
+  IEntity owner = slot.GetOwner();
+  if (owner && BBB.Health(owner) <= 0) return false;
+  TurretControllerComponent controller = TurretControllerOf(slot);
+  if (!controller) return false;
+  IEntity turretEnt = controller.GetOwner();
+  if (turretEnt && BBB.Health(turretEnt) <= 0) return false;
+  BaseWeaponManagerComponent wm = controller.GetWeaponManager();
+  if (!wm) return false;
+  BaseWeaponComponent weapon = wm.GetCurrentWeapon();
+  if (!weapon)
+  {
+   array<IEntity> weapons = {};
+   wm.GetWeaponsList(weapons);
+   foreach (IEntity wEnt : weapons)
+   {
+    weapon = BaseWeaponComponent.Cast(wEnt.FindComponent(BaseWeaponComponent));
+    if (weapon) break;
+   }
+  }
+  if (!weapon) return false;
+  if (weapon.GetCurrentMagazine() && weapon.GetCurrentMagazine().GetAmmoCount() > 0) return true;
+  if (weapon.GetCurrentMuzzle() && weapon.GetCurrentMuzzle().GetAmmoCount() > 0) return true;
+  if (turretEnt)
+  {
+   InventoryStorageManagerComponent inv = InventoryStorageManagerComponent.Cast(turretEnt.FindComponent(InventoryStorageManagerComponent));
+   if (inv && inv.GetMagazineCountByWeapon(weapon) > 0) return true;
+  }
+  return false;
+ }
+
+ protected static bool EjectFromCompartment(IEntity vehicle, ChimeraCharacter ch)
+ {
+  if (!vehicle || !ch) return false;
+  CompartmentAccessComponent acc = ch.GetCompartmentAccessComponent();
+  if (!acc) return false;
+  BaseCompartmentSlot curSlot = acc.GetCompartment();
+  if (!curSlot && !ch.IsInVehicle()) return true;
+  bool ok = acc.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+  if (!ok)
+  {
+   vector ejectMat[4];
+   ch.GetWorldTransform(ejectMat);
+   vector side = vehicle.GetTransformAxis(0);
+   ejectMat[3] = BBB.Ground(vehicle.GetOrigin() + side * 2.5);
+   acc.GetOutVehicle_NoDoor(ejectMat, false, false);
+  }
+  return true;
+ }
+
+ protected static bool EjectIncapacitatedOccupant(IEntity vehicle, BaseCompartmentSlot slot)
+ {
+  if (!vehicle || !slot) return false;
+  IEntity occ = slot.GetOccupant();
+  if (!occ) return true;
+  if (BBB.PlayerOf(occ) || IsAble(occ)) return false;
+  ChimeraCharacter ch = ChimeraCharacter.Cast(occ);
+  if (!ch) return false;
+  return EjectFromCompartment(vehicle, ch);
+ }
+
+ static void DoSeatInTurret(IEntity vehicle, BaseCompartmentSlot slot, ChimeraCharacter candidate, SCR_AIGroup group, int retries = 0)
+ {
+  if (!vehicle || !slot || !candidate || !IsAble(candidate))
+  {
+   s_aReplacingVehicles.RemoveItem(vehicle);
+   return;
+  }
+  CompartmentAccessComponent acc = candidate.GetCompartmentAccessComponent();
+  if (!acc)
+  {
+   s_aReplacingVehicles.RemoveItem(vehicle);
+   return;
+  }
+  if (candidate.IsInVehicle() || acc.GetCompartment() != null || acc.IsGettingOut() || acc.IsGettingIn())
+  {
+   if (retries < 10)
+   {
+    GetGame().GetCallqueue().CallLater(DoSeatInTurret, 40, false, vehicle, slot, candidate, group, retries + 1);
+    return;
+   }
+   s_aReplacingVehicles.RemoveItem(vehicle);
+   return;
+  }
+  IEntity occ = slot.GetOccupant();
+  if (occ && occ != candidate)
+  {
+   if (IsAble(occ))
+   {
+    s_aReplacingVehicles.RemoveItem(vehicle);
+    return;
+   }
+   EjectFromCompartment(vehicle, ChimeraCharacter.Cast(occ));
+   if (retries < 10)
+   {
+    GetGame().GetCallqueue().CallLater(DoSeatInTurret, 40, false, vehicle, slot, candidate, group, retries + 1);
+    return;
+   }
+   s_aReplacingVehicles.RemoveItem(vehicle);
+   return;
+  }
+
+  IEntity targetVeh = slot.GetVehicle();
+  if (!targetVeh) targetVeh = vehicle;
+  if (!targetVeh) targetVeh = slot.GetOwner();
+  bool ok = acc.GetInVehicle(targetVeh, slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+  if (!ok && targetVeh != vehicle && vehicle)
+   ok = acc.GetInVehicle(vehicle, slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+  if (!ok && targetVeh != slot.GetOwner() && slot.GetOwner())
+   ok = acc.GetInVehicle(slot.GetOwner(), slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+
+  if (!ok && retries < 8)
+  {
+   GetGame().GetCallqueue().CallLater(DoSeatInTurret, 50, false, vehicle, slot, candidate, group, retries + 1);
+   return;
+  }
+
+  s_aReplacingVehicles.RemoveItem(vehicle);
+
+  if (ok)
+  {
+   s_iGunnerReplacements++;
+   BBB_Perf.Count("vehicle.gunnerReplace");
+   AIControlComponent ai = AIControlComponent.Cast(candidate.FindComponent(AIControlComponent));
+   if (ai && !ai.IsAIActivated()) ai.ActivateAI();
+   string gName = "vehicle";
+   if (group) gName = BBB.s_Hooks.NameOf(group);
+   PrintFormat("[BBB] TURRET %1: promoted passenger %2 into %3", gName, candidate, slot.GetCompartmentName());
+  }
+ }
+
+ static bool TryReplaceGunner(IEntity vehicle, SCR_AIGroup group = null)
+ {
+  if (!s_bGunnerReplace || !vehicle || BBB.Health(vehicle) <= 0 || BBB.s_Hooks.LeaveAlone(vehicle)) return false;
+  if (group && BBB.HasPlayer(group)) return false;
+  if (s_aReplacingVehicles.Contains(vehicle)) return false;
+  Physics phys = vehicle.GetPhysics();
+  float speed = 0;
+  if (phys) speed = phys.GetVelocity().Length();
+  if (speed > 12.0) return false;
+
   SCR_BaseCompartmentManagerComponent compartments = SCR_BaseCompartmentManagerComponent.Cast(vehicle.FindComponent(SCR_BaseCompartmentManagerComponent));
   if (!compartments) return false;
+
+  array<BaseCompartmentSlot> allSlots = {};
+  GetVehicleCompartments(vehicle, allSlots);
+  foreach (BaseCompartmentSlot s : allSlots)
+  {
+   ChimeraCharacter occ = ChimeraCharacter.Cast(s.GetOccupant());
+   if (!occ) continue;
+   if (BBB.PlayerOf(occ) && s.GetType() != ECompartmentType.CARGO) return false;
+   CompartmentAccessComponent occAcc = occ.GetCompartmentAccessComponent();
+   if (occAcc && occAcc.IsGettingOut()) return false;
+  }
+
   array<BaseCompartmentSlot> turrets = {};
-  compartments.GetCompartmentsOfType(turrets, ECompartmentType.TURRET);
+  GetVehicleCompartments(vehicle, turrets, ECompartmentType.TURRET);
+  if (turrets.IsEmpty()) return false;
+
+  BaseCompartmentSlot targetTurret = null;
   foreach (BaseCompartmentSlot slot : turrets)
-   if (BBB.IsAlive(slot.GetOccupant())) return true;
-  return false;
+  {
+   if (!TurretHasAmmo(slot)) continue;
+   IEntity occ = slot.GetOccupant();
+   if (!occ)
+   {
+    targetTurret = slot;
+    break;
+   }
+   if (!BBB.PlayerOf(occ) && !IsAble(occ))
+   {
+    targetTurret = slot;
+    break;
+   }
+  }
+  if (!targetTurret) return false;
+
+  IEntity leaderEnt = null;
+  if (group && group.GetLeaderAgent()) leaderEnt = group.GetLeaderAgent().GetControlledEntity();
+
+  // Priority 1: Fit AI cargo passenger already aboard the vehicle (prefer non-leader).
+  ChimeraCharacter candidate = null;
+  ChimeraCharacter fallbackLeader = null;
+  array<BaseCompartmentSlot> cargoSlots = {};
+  GetVehicleCompartments(vehicle, cargoSlots, ECompartmentType.CARGO);
+  foreach (BaseCompartmentSlot cSlot : cargoSlots)
+  {
+   ChimeraCharacter ch = ChimeraCharacter.Cast(cSlot.GetOccupant());
+   if (!ch || !IsAble(ch) || BBB.PlayerOf(ch)) continue;
+   CompartmentAccessComponent acc = ch.GetCompartmentAccessComponent();
+   if (!acc || acc.IsGettingIn() || acc.IsGettingOut()) continue;
+   AIControlComponent ai = AIControlComponent.Cast(ch.FindComponent(AIControlComponent));
+   if (!ai || !ai.GetControlAIAgent()) continue;
+   if (ch == leaderEnt)
+   {
+    if (!fallbackLeader) fallbackLeader = ch;
+    continue;
+   }
+   candidate = ch;
+   break;
+  }
+  if (!candidate) candidate = fallbackLeader;
+
+  // Priority 2: Nearby dismounted AI squadmate within 8 m when vehicle is crewed by this group and stationary.
+  if (!candidate && group && speed < 2.0 && BBB_Transport.CrewedVehicle(group) == vehicle)
+  {
+   bool allowFoot = true;
+   SCR_AIGroupUtilityComponent grpUtil = SCR_AIGroupUtilityComponent.Cast(group.FindComponent(SCR_AIGroupUtilityComponent));
+   SCR_AIVehicleUsageComponent usage = SCR_AIVehicleUsageComponent.Cast(vehicle.FindComponent(SCR_AIVehicleUsageComponent));
+   if (grpUtil && usage && !grpUtil.IsUsableVehicle(usage)) allowFoot = false;
+   if (allowFoot)
+   {
+    array<AIAgent> agents = {};
+    BBB.s_Hooks.GetMembers(group, agents);
+    float bestDist = GUNNER_FOOT_REACH_M;
+    foreach (AIAgent agent : agents)
+    {
+     ChimeraCharacter ch = ChimeraCharacter.Cast(agent.GetControlledEntity());
+     if (!ch || ch.IsInVehicle() || !IsAble(ch) || BBB.PlayerOf(ch)) continue;
+     if (BBB_Drag.Busy(ch) || BBB_Medic.s_mGoingTo.Contains(ch)) continue;
+     CompartmentAccessComponent acc = ch.GetCompartmentAccessComponent();
+     if (!acc || acc.IsGettingIn() || acc.IsGettingOut()) continue;
+     float d = vector.DistanceXZ(ch.GetOrigin(), vehicle.GetOrigin());
+     if (d <= bestDist)
+     {
+      bestDist = d;
+      candidate = ch;
+     }
+    }
+   }
+  }
+
+  if (!candidate) return false;
+
+  bool needsEject = false;
+  if (targetTurret.GetOccupant())
+  {
+   EjectIncapacitatedOccupant(vehicle, targetTurret);
+   needsEject = true;
+  }
+  CompartmentAccessComponent candAcc = candidate.GetCompartmentAccessComponent();
+  if (candidate.IsInVehicle() || (candAcc && candAcc.GetCompartment() != null))
+  {
+   EjectFromCompartment(vehicle, candidate);
+   needsEject = true;
+  }
+
+  s_aReplacingVehicles.Insert(vehicle);
+  float now = GetGame().GetWorld().GetWorldTime();
+  s_mGunnerReplaceNext.Set(vehicle, now + GUNNER_REPLACE_COOLDOWN_MS);
+  if (needsEject)
+  {
+   GetGame().GetCallqueue().CallLater(DoSeatInTurret, 100, false, vehicle, targetTurret, candidate, group, 0);
+  }
+  else
+  {
+   DoSeatInTurret(vehicle, targetTurret, candidate, group, 0);
+  }
+  return true;
+ }
+
+ protected void ReplaceGunnerFor(SCR_AIGroup group, notnull array<IEntity> replacedVehicles)
+ {
+  if (!s_bGunnerReplace || !group || BBB.HasPlayer(group)) return;
+  IEntity vehicle = BBB_Transport.CrewedVehicle(group);
+  if (!vehicle)
+  {
+   array<AIAgent> agents = {};
+   BBB.s_Hooks.GetMembers(group, agents);
+   foreach (AIAgent agent : agents)
+   {
+    IEntity body = agent.GetControlledEntity();
+    vehicle = BBB_Transport.VehicleOf(body);
+    if (vehicle) break;
+   }
+  }
+  if (!vehicle || replacedVehicles.Contains(vehicle) || s_aReplacingVehicles.Contains(vehicle) || BBB.s_Hooks.LeaveAlone(vehicle)) return;
+  replacedVehicles.Insert(vehicle);
+
+  float now = GetGame().GetWorld().GetWorldTime();
+  if (s_mGunnerReplaceNext.Contains(vehicle) && now < s_mGunnerReplaceNext.Get(vehicle)) return;
+
+  TryReplaceGunner(vehicle, group);
  }
 
  static int DismountGroupFromVehicle(SCR_AIGroup group, IEntity vehicle, bool cargoOnly = false)

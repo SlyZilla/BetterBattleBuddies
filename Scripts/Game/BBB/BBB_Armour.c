@@ -11,7 +11,8 @@
 // When such a pair is a soldier's pick he holds that fire and his target picker turns to
 // targets he can hurt (see the modded combat component below). Works with any mod's
 // vehicles and ammo; no tables.
-// Host options: -bbbArmour 0 (off), -bbbArmourHits <n> (hits before a verdict, default 12).
+// Host options: -bbbArmour 0 (off), -bbbArmourHits <n> (hits before a verdict, default 12),
+//               -bbbArmourScatter 0 / -bbbAntiArmor 0 (off).
 class BBB_ArmourStat : Managed
 {
  int m_iHits;
@@ -19,17 +20,37 @@ class BBB_ArmourStat : Managed
  bool m_bUseless;
 }
 
+class BBB_AntiArmorJob : Managed
+{
+ IEntity m_Soldier;
+ SCR_AIUtilityComponent m_Utility;
+ ref SCR_AICharacterStanceSetting m_StanceSetting;
+ ECharacterStance m_eTargetStance;
+ float m_fEndMs;
+ bool m_bIsAT;
+}
+
 class BBB_Armour
 {
  static bool s_bRead;
  static bool s_bOn = true;
  static bool s_bLearn = true; // learning runs even while a test switches the behaviour off
+ static bool s_bScatter = true;
  static int s_iMinHits = 12;
  static const float THROUGH_SHARE = 0.1;
  static const float HIT_EFFECTIVE = 1.0; // effective damage that counts as getting through
+ static const float AA_THREAT_RANGE_M = 450.0;
+ static const float AA_CLOSE_RANGE_M = 120.0;
+ static const float AA_DURATION_MIN_S = 8.0;
+ static const float AA_DURATION_MAX_S = 14.0;
+ static const int AA_WATCH_MS = 250;
  static ref map<string, ref BBB_ArmourStat> s_Stats = new map<string, ref BBB_ArmourStat>();
+ static ref array<ref BBB_AntiArmorJob> s_aAntiArmorJobs = {};
+ static bool s_bAntiArmorWatching;
  static int s_iSteered;     // tests read these
  static int s_iHeld;
+ static int s_iScattered;
+ static int s_iATIsolated;
  static ref array<IEntity> s_aVanilla = {}; // test only: soldiers who keep vanilla picks
  static bool s_bDiag;                       // test only: log what the shooter was doing
  static IEntity s_Watch;                    // test only: every hit on this vehicle, by type and source
@@ -44,7 +65,8 @@ class BBB_Armour
   string value;
   if (System.GetCLIParam("bbbArmour", value) && value == "0") { s_bOn = false; s_bLearn = false; }
   if (System.GetCLIParam("bbbArmourHits", value)) s_iMinHits = Math.Max(1, value.ToInt());
-  PrintFormat("[BBB] ARMOUR on=%1 hits=%2", s_bOn, s_iMinHits);
+  if ((System.GetCLIParam("bbbArmourScatter", value) && value == "0") || (System.GetCLIParam("bbbAntiArmor", value) && value == "0")) s_bScatter = false;
+  PrintFormat("[BBB] ARMOUR on=%1 hits=%2 scatter=%3", s_bOn, s_iMinHits, s_bScatter);
  }
 
  static bool On(IEntity soldier)
@@ -263,6 +285,253 @@ class BBB_Armour
    PrintFormat("[BBB] ARMOUR stat %1: %2 hits, %3 through, useless %4", key, stat.m_iHits, stat.m_iThrough, stat.m_bUseless);
   foreach (string what, int n : s_mDiag)
    PrintFormat("[BBB] ARMOUR wasted rounds after learning, shooter busy with %1: %2", what, n);
+ }
+
+ // ---------------------------------------------------------------- anti-armor infantry scattering & AT isolation
+
+ static bool ScatterOn()
+ {
+  Read();
+  return s_bOn && s_bScatter;
+ }
+
+ static bool HasOperationalAT(ChimeraCharacter soldier)
+ {
+  if (!soldier) return false;
+  CharacterControllerComponent controller = soldier.GetCharacterController();
+  if (!controller) return false;
+  BaseWeaponManagerComponent wm = controller.GetWeaponManagerComponent();
+  if (!wm) return false;
+  array<IEntity> weapons = {};
+  wm.GetWeaponsList(weapons);
+  foreach (IEntity weaponEntity : weapons)
+  {
+   BaseWeaponComponent weapon = BaseWeaponComponent.Cast(weaponEntity.FindComponent(BaseWeaponComponent));
+   if (!weapon || weapon.GetWeaponType() != EWeaponType.WT_ROCKETLAUNCHER) continue;
+   int rounds = 0;
+   array<BaseMuzzleComponent> muzzles = {};
+   weapon.GetMuzzlesList(muzzles);
+   foreach (BaseMuzzleComponent muzzle : muzzles) rounds += muzzle.GetAmmoCount();
+   BaseMagazineComponent mag = weapon.GetCurrentMagazine();
+   if (mag) rounds += mag.GetAmmoCount();
+   if (rounds > 0) return true;
+   // Also check inventory for spare rockets if tube is reloadable.
+   InventoryStorageManagerComponent inv = InventoryStorageManagerComponent.Cast(soldier.FindComponent(InventoryStorageManagerComponent));
+   if (inv && inv.GetMagazineCountByWeapon(weapon) > 0) return true;
+  }
+  return false;
+ }
+
+ static bool IsArmoredThreat(IEntity entity)
+ {
+  if (!entity) return false;
+  IEntity vehicle = VehicleOf(entity);
+  if (!vehicle || Aircraft(vehicle)) return false;
+  PerceivableComponent perc = PerceivableComponent.Cast(vehicle.FindComponent(PerceivableComponent));
+  if (perc)
+  {
+   EAIUnitType ut = perc.GetUnitType();
+   if (ut == EAIUnitType.UnitType_VehicleHeavy || ut == EAIUnitType.UnitType_VehicleMedium) return true;
+  }
+  if (BBB_VehicleHelpers.HasTurret(vehicle)) return true;
+  return false;
+ }
+
+ static bool EligibleForAntiArmor(SCR_AIUtilityComponent utility, IEntity soldier)
+ {
+  if (!utility || !soldier || !ScatterOn()) return false;
+  if (!BBB.IsAlive(soldier) || BBB.PlayerOf(soldier) != 0) return false;
+  ChimeraCharacter character = ChimeraCharacter.Cast(soldier);
+  if (!character || character.IsInVehicle()) return false;
+  SCR_CharacterControllerComponent controller = SCR_CharacterControllerComponent.Cast(character.GetCharacterController());
+  if (!controller || controller.IsDead() || controller.IsUnconscious() || controller.IsPlayerControlled()) return false;
+  if (controller.IsClimbing() || controller.IsSwimming() || controller.IsFalling()) return false;
+  if (utility.m_AIInfo && (utility.m_AIInfo.HasUnitState(EUnitState.IN_TURRET) || utility.m_AIInfo.HasUnitState(EUnitState.PILOT))) return false;
+  if (BBB_Drag.Busy(soldier)) return false;
+  if (BBB_OrderIntent.Blocks(utility)) return false;
+  return true;
+ }
+
+ static bool InAntiArmorJob(IEntity soldier)
+ {
+  if (!soldier) return false;
+  foreach (BBB_AntiArmorJob job : s_aAntiArmorJobs)
+   if (job && job.m_Soldier == soldier) return true;
+  return false;
+ }
+
+ static BBB_AntiArmorJob JobFor(IEntity soldier)
+ {
+  if (!soldier) return null;
+  foreach (BBB_AntiArmorJob job : s_aAntiArmorJobs)
+   if (job && job.m_Soldier == soldier) return job;
+  return null;
+ }
+
+ static void CheckGroupAntiArmor(SCR_AIGroup group, IEntity forcedThreat = null)
+ {
+  if (!group || !ScatterOn()) return;
+  IEntity threat = forcedThreat;
+  if (!threat)
+  {
+   array<AIAgent> groupAgents = {};
+   group.GetAgents(groupAgents);
+   foreach (AIAgent member : groupAgents)
+   {
+    if (!member) continue;
+    SCR_AIUtilityComponent memberUtil = SCR_AIUtilityComponent.Cast(member.FindComponent(SCR_AIUtilityComponent));
+    if (!memberUtil || !memberUtil.m_PerceptionComponent) continue;
+    array<BaseTarget> targets = {};
+    memberUtil.m_PerceptionComponent.GetTargetsList(targets, ETargetCategory.ENEMY);
+    foreach (BaseTarget target : targets)
+    {
+     if (!target || !target.GetTargetEntity()) continue;
+     if (IsArmoredThreat(target.GetTargetEntity()))
+     {
+      threat = target.GetTargetEntity();
+      break;
+     }
+    }
+    if (threat) break;
+   }
+  }
+  if (!threat) return;
+
+  vector threatPos = threat.GetOrigin();
+  array<AIAgent> agents = {};
+  group.GetAgents(agents);
+  float nowMs = GetGame().GetWorld().GetWorldTime();
+
+  foreach (AIAgent agent : agents)
+  {
+   if (!agent) continue;
+   ChimeraCharacter soldier = ChimeraCharacter.Cast(agent.GetControlledEntity());
+   if (!soldier) continue;
+   SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+   if (!EligibleForAntiArmor(utility, soldier)) continue;
+
+   float dist = vector.Distance(soldier.GetOrigin(), threatPos);
+   if (dist > AA_THREAT_RANGE_M) continue;
+
+   bool isAT = HasOperationalAT(soldier);
+   float holdS = AA_DURATION_MIN_S + Math.RandomFloat01() * (AA_DURATION_MAX_S - AA_DURATION_MIN_S);
+   float endMs = nowMs + holdS * 1000.0;
+
+   // Update or insert job
+   BBB_AntiArmorJob job;
+   foreach (BBB_AntiArmorJob existing : s_aAntiArmorJobs)
+   {
+    if (existing.m_Soldier == soldier) { job = existing; break; }
+   }
+
+   if (job)
+   {
+    job.m_fEndMs = Math.Max(job.m_fEndMs, endMs);
+    job.m_bIsAT = isAT;
+   }
+   else
+   {
+    job = new BBB_AntiArmorJob();
+    job.m_Soldier = soldier;
+    job.m_Utility = utility;
+    job.m_bIsAT = isAT;
+    job.m_fEndMs = endMs;
+    s_aAntiArmorJobs.Insert(job);
+   }
+
+   if (isAT)
+   {
+    // Isolated AT specialist: stays combat-effective, do not restrict stance
+    if (job.m_StanceSetting && utility.m_SettingsComponent)
+    {
+     utility.m_SettingsComponent.RemoveSetting(job.m_StanceSetting);
+     job.m_StanceSetting = null;
+    }
+    s_iATIsolated++;
+    BBB_Perf.Count("armour.atIsolated");
+   }
+   else
+   {
+    // Non-AT infantry scattering: drop to PRONE (close) or CROUCH (medium)
+    ECharacterStance targetStance = ECharacterStance.CROUCH;
+    if (dist <= AA_CLOSE_RANGE_M) targetStance = ECharacterStance.PRONE;
+    job.m_eTargetStance = targetStance;
+
+    SCR_CharacterControllerComponent controller = SCR_CharacterControllerComponent.Cast(soldier.GetCharacterController());
+    if (controller)
+    {
+     SCR_AICharacterSettingsComponent settings = utility.m_SettingsComponent;
+     if (settings)
+     {
+      if (job.m_StanceSetting) settings.RemoveSetting(job.m_StanceSetting);
+      job.m_StanceSetting = SCR_AICharacterStanceSetting.Create(SCR_EAISettingOrigin.BEHAVIOR, SCR_EAIBehaviorCause.ALWAYS, targetStance);
+      settings.AddCharacterSetting(job.m_StanceSetting, false);
+     }
+     SCR_AIStanceHandling.SetStance(controller, targetStance);
+    }
+    s_iScattered++;
+    BBB_Perf.Count("armour.scattered");
+   }
+  }
+
+  if (!s_aAntiArmorJobs.IsEmpty()) StartAntiArmorWatch();
+ }
+
+ protected static void StartAntiArmorWatch()
+ {
+  if (s_bAntiArmorWatching || !GetGame()) return;
+  s_bAntiArmorWatching = true;
+  GetGame().GetCallqueue().Remove(TickAntiArmor);
+  GetGame().GetCallqueue().CallLater(TickAntiArmor, AA_WATCH_MS, true);
+ }
+
+ static void TickAntiArmor()
+ {
+  if (!s_bAntiArmorWatching)
+  {
+   if (GetGame()) GetGame().GetCallqueue().Remove(TickAntiArmor);
+   return;
+  }
+  if (!GetGame() || !GetGame().GetWorld()) return;
+  float nowMs = GetGame().GetWorld().GetWorldTime();
+  StepAntiArmor(nowMs);
+  if (s_aAntiArmorJobs.IsEmpty())
+  {
+   s_bAntiArmorWatching = false;
+   GetGame().GetCallqueue().Remove(TickAntiArmor);
+  }
+ }
+
+ static void StepAntiArmor(float nowMs)
+ {
+  for (int i = s_aAntiArmorJobs.Count() - 1; i >= 0; i--)
+  {
+   BBB_AntiArmorJob job = s_aAntiArmorJobs[i];
+   if (!job || !EligibleForAntiArmor(job.m_Utility, job.m_Soldier) || nowMs >= job.m_fEndMs)
+   {
+    ReleaseAntiArmorJob(job);
+    s_aAntiArmorJobs.RemoveOrdered(i);
+   }
+  }
+ }
+
+ protected static void ReleaseAntiArmorJob(BBB_AntiArmorJob job)
+ {
+  if (!job) return;
+  if (job.m_StanceSetting && job.m_Utility && job.m_Utility.m_SettingsComponent)
+   job.m_Utility.m_SettingsComponent.RemoveSetting(job.m_StanceSetting);
+  job.m_StanceSetting = null;
+ }
+
+ static void Stop()
+ {
+  s_bAntiArmorWatching = false;
+  if (GetGame()) GetGame().GetCallqueue().Remove(TickAntiArmor);
+  foreach (BBB_AntiArmorJob job : s_aAntiArmorJobs)
+   ReleaseAntiArmorJob(job);
+  s_aAntiArmorJobs.Clear();
+  s_iScattered = 0;
+  s_iATIsolated = 0;
  }
 }
 

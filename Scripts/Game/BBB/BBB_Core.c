@@ -51,6 +51,7 @@ class BBB
   if (s_bStarted || !Replication.IsServer()) return;
 		s_bStarted = true;
 		BBB_Perf.Read();
+		BBB_Rearm.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -69,6 +70,9 @@ class BBB
   BBB_Medic.Stop();
   BBB_RelaxedMarch.Stop();
   BBB_HorizonScan.Stop();
+  BBB_Threat.Stop();
+  BBB_Armour.Stop();
+  BBB_Rearm.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -87,6 +91,11 @@ class BBB
 		t = BBB_Perf.Lap("tick.launchers", t);
 		if (s_Combat) s_Combat.Tick();
 		t = BBB_Perf.Lap("tick.combat", t);
+		array<SCR_AIGroup> rearmGroups = {};
+		s_Hooks.GetGroups(rearmGroups);
+		foreach (SCR_AIGroup rg : rearmGroups)
+			BBB_Rearm.CheckRearmFor(rg);
+		t = BBB_Perf.Lap("tick.rearm", t);
 		BBB_FireManeuver.Tick();
 		t = BBB_Perf.Lap("tick.fireManeuver", t);
 		BBB_WeaponReady.Tick();
