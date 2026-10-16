@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 — 2026-10-15
+
+- Medics and teammates now deploy smoke cover toward enemy threats by default before advancing to treat an exposed casualty, waiting briefly for the smoke cloud to bloom.
+- Added standalone tactical cargo dismount under fire: AI passengers in ground vehicles that slow down or lose their driver under fire automatically dismount to fight on foot while turret crews remain aboard.
+- Added standalone speed-aware stalled vehicle unsticking: AI drivers stuck against obstacles reverse and steer clear automatically in Conflict, Game Master, and custom scenarios without requiring Arma Commander: Actual.
+
 ## 0.1.1 — 2026-10-15
 
 - Updated the Workshop thumbnail.

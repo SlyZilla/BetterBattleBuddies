@@ -12,16 +12,29 @@ class BBB_VehicleHelpers : Managed
  static const float LOOK_RADIUS = 25;   // for a gate up to ~45 m ahead
  static const float GATE_MIN_WIDTH = 2.2; // smaller doors are house doors: left alone
  static const float BED_HEIGHT = 0.9;    // m above the ground
+ static const float STALL_SECONDS = 8.0;
+ static const float STALL_SECONDS_FIGHTING = 25.0;
+ static const float STALL_SECONDS_HELPLESS = 3.0;
+ static const int UNSTICK_TRIES = 2;
 
  protected ref array<IEntity> m_Found = {};
  protected ref map<IEntity, int> m_OnBed = new map<IEntity, int>();
+ protected ref map<IEntity, vector> m_StallPos = new map<IEntity, vector>();
+ protected ref map<IEntity, float> m_StallSince = new map<IEntity, float>();
+ protected ref map<IEntity, int> m_Unsticks = new map<IEntity, int>();
+ protected ref array<IEntity> m_Unsticking = {};
+ protected ref BBB_VehicleHelpersUnstick m_UnstickListener;
 
  protected static bool s_bDoors = true;
+ protected static bool s_bUnstick = true;
+ protected static bool s_bTacticalDismount = true;
 
  void BBB_VehicleHelpers()
  {
   string val;
   if (System.GetCLIParam("bbbDoors", val) && val == "0") s_bDoors = false;
+  if (System.GetCLIParam("bbbUnstick", val) && val == "0") s_bUnstick = false;
+  if (System.GetCLIParam("bbbTacticalDismount", val) && val == "0") s_bTacticalDismount = false;
  }
 
  void Tick()
@@ -29,12 +42,18 @@ class BBB_VehicleHelpers : Managed
   array<SCR_AIGroup> groups = {};
   BBB.s_Hooks.GetGroups(groups);
   array<IEntity> handledVehicles = {};
+  array<IEntity> watchedVehicles = {};
   foreach (SCR_AIGroup group : groups)
   {
    if (!group) continue;
    OpenGatesFor(group);
    GetOffBeds(group);
    CloseDoors(group, handledVehicles);
+   if (!BBB.s_Hooks.ManagesVehicleDriving(group))
+   {
+    CheckTacticalDismountFor(group);
+    WatchDrivingFor(group, watchedVehicles);
+   }
   }
  }
 
@@ -239,4 +258,207 @@ class BBB_VehicleHelpers : Managed
   }
   return closed;
  }
+
+ // ---------------------------------------------------------------- standalone tactical dismount & unstick
+
+ static int KnownEnemiesNear(SCR_AIGroup group, vector origin, float radius)
+ {
+  if (!group) return 0;
+  SCR_AIGroupUtilityComponent utility = SCR_AIGroupUtilityComponent.Cast(group.FindComponent(SCR_AIGroupUtilityComponent));
+  if (!utility || !utility.m_Perception) return 0;
+  int count = 0;
+  foreach (IEntity enemy : utility.m_Perception.m_aTargetEntities)
+  {
+   if (!BBB.IsAlive(enemy)) continue;
+   if (vector.DistanceXZ(enemy.GetOrigin(), origin) <= radius) count++;
+  }
+  return count;
+ }
+
+ static bool HasTurret(IEntity vehicle)
+ {
+  if (!vehicle) return false;
+  SCR_BaseCompartmentManagerComponent compartments = SCR_BaseCompartmentManagerComponent.Cast(vehicle.FindComponent(SCR_BaseCompartmentManagerComponent));
+  if (!compartments) return false;
+  array<BaseCompartmentSlot> turrets = {};
+  compartments.GetCompartmentsOfType(turrets, ECompartmentType.TURRET);
+  return !turrets.IsEmpty();
+ }
+
+ static bool HasGunner(IEntity vehicle)
+ {
+  if (!vehicle) return false;
+  SCR_BaseCompartmentManagerComponent compartments = SCR_BaseCompartmentManagerComponent.Cast(vehicle.FindComponent(SCR_BaseCompartmentManagerComponent));
+  if (!compartments) return false;
+  array<BaseCompartmentSlot> turrets = {};
+  compartments.GetCompartmentsOfType(turrets, ECompartmentType.TURRET);
+  foreach (BaseCompartmentSlot slot : turrets)
+   if (BBB.IsAlive(slot.GetOccupant())) return true;
+  return false;
+ }
+
+ static int DismountGroupFromVehicle(SCR_AIGroup group, IEntity vehicle, bool cargoOnly = false)
+ {
+  if (!group || !vehicle) return 0;
+  if (!cargoOnly || !BBB_Transport.CrewedVehicle(group))
+  {
+   SCR_AIGroupUtilityComponent utility = SCR_AIGroupUtilityComponent.Cast(group.FindComponent(SCR_AIGroupUtilityComponent));
+   SCR_AIVehicleUsageComponent usage = SCR_AIVehicleUsageComponent.Cast(vehicle.FindComponent(SCR_AIVehicleUsageComponent));
+   if (utility && usage && utility.IsUsableVehicle(usage))
+    utility.RemoveUsableVehicle(usage);
+  }
+  int dropped = 0;
+  array<AIAgent> agents = {};
+  BBB.s_Hooks.GetMembers(group, agents);
+  foreach (AIAgent agent : agents)
+  {
+   ChimeraCharacter ch = ChimeraCharacter.Cast(agent.GetControlledEntity());
+   if (!ch || !BBB.IsAlive(ch) || BBB.PlayerOf(ch)) continue;
+   if (BBB_Transport.VehicleOf(ch) != vehicle) continue;
+   if (cargoOnly && BBB_Transport.SeatOf(ch) != ECompartmentType.CARGO) continue;
+   CompartmentAccessComponent access = ch.GetCompartmentAccessComponent();
+   if (!access) continue;
+   if (!access.GetOutVehicle(EGetOutType.ANIMATED, -1, ECloseDoorAfterActions.LEAVE_OPEN, false))
+    access.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+   dropped++;
+  }
+  return dropped;
+ }
+
+ protected void CheckTacticalDismountFor(SCR_AIGroup group)
+ {
+  if (!s_bTacticalDismount || !group || BBB.HasPlayer(group)) return;
+  IEntity vehicle = null;
+  array<AIAgent> agents = {};
+  BBB.s_Hooks.GetMembers(group, agents);
+  foreach (AIAgent agent : agents)
+  {
+   IEntity body = agent.GetControlledEntity();
+   if (body && BBB.IsAlive(body) && BBB_Transport.SeatOf(body) == ECompartmentType.CARGO)
+   {
+    vehicle = BBB_Transport.VehicleOf(body);
+    if (vehicle) break;
+   }
+  }
+  if (!vehicle || BBB.s_Hooks.LeaveAlone(vehicle)) return;
+  if (!CarControllerComponent.Cast(vehicle.FindComponent(CarControllerComponent))) return;
+
+  bool hitRecently = BBB_Transport.VehicleHitRecently(vehicle, 6000);
+  bool underFire = hitRecently || KnownEnemiesNear(group, vehicle.GetOrigin(), 250) > 0;
+  if (!underFire) return;
+
+  ChimeraCharacter driver = BBB.DriverOf(vehicle);
+  bool driverLost = !driver || !BBB.IsAlive(driver);
+  Physics phys = vehicle.GetPhysics();
+  float speed = 0;
+  if (phys) speed = phys.GetVelocity().Length();
+
+  bool dismount = (driverLost && speed < 3.0) || (hitRecently && speed < 5.0) || speed < 3.5;
+  if (!dismount) return;
+
+  bool hasGunner = HasGunner(vehicle);
+  if (hasGunner && BBB_Transport.CrewedVehicle(group) == vehicle) return;
+  if (DismountGroupFromVehicle(group, vehicle, hasGunner) > 0)
+   PrintFormat("[BBB] TACTICS %1: tactical dismount under fire", BBB.s_Hooks.NameOf(group));
+ }
+
+ protected void ClearStallState(IEntity vehicle)
+ {
+  m_StallPos.Remove(vehicle);
+  m_StallSince.Remove(vehicle);
+  m_Unsticks.Remove(vehicle);
+ }
+
+ void OnUnstickEnded(IEntity vehicle)
+ {
+  m_Unsticking.RemoveItem(vehicle);
+  if (vehicle && GetGame() && GetGame().GetWorld())
+  {
+   m_StallPos.Set(vehicle, vehicle.GetOrigin());
+   m_StallSince.Set(vehicle, GetGame().GetWorld().GetWorldTime());
+  }
+ }
+
+ protected void WatchDrivingFor(SCR_AIGroup group, notnull array<IEntity> watchedVehicles)
+ {
+  if (!s_bUnstick || !group || BBB.HasPlayer(group)) return;
+  IEntity vehicle = BBB_Transport.CrewedVehicle(group);
+  if (!vehicle || watchedVehicles.Contains(vehicle) || BBB.s_Hooks.LeaveAlone(vehicle)) return;
+  if (!CarControllerComponent.Cast(vehicle.FindComponent(CarControllerComponent))) return;
+  watchedVehicles.Insert(vehicle);
+  if (m_Unsticking.Contains(vehicle)) return;
+
+  Physics phys = vehicle.GetPhysics();
+  float speed = 0;
+  if (phys) speed = phys.GetVelocity().Length();
+
+  ChimeraCharacter driver = BBB.DriverOf(vehicle);
+  bool hitRecently = BBB_Transport.VehicleHitRecently(vehicle, 6000);
+  bool underFire = hitRecently || KnownEnemiesNear(group, vehicle.GetOrigin(), 300) > 0;
+
+  if (underFire && (!driver || !BBB.IsAlive(driver)) && speed < 2.0)
+  {
+   if (DismountGroupFromVehicle(group, vehicle, false) > 0)
+    PrintFormat("[BBB] DRIVE %1: driver lost under fire, crew bails out", BBB.s_Hooks.NameOf(group));
+   ClearStallState(vehicle);
+   return;
+  }
+
+  bool eligible = driver != null && BBB.IsAlive(driver) && !BBB.PlayerOf(driver);
+  bool wantsToMove = false;
+  if (eligible)
+  {
+   AIWaypoint wp = group.GetCurrentWaypoint();
+   if (wp)
+   {
+    float stopDist = Math.Max(15.0, wp.GetCompletionRadius());
+    wantsToMove = vector.DistanceXZ(vehicle.GetOrigin(), wp.GetOrigin()) > stopDist;
+   }
+  }
+
+  float now = GetGame().GetWorld().GetWorldTime();
+  bool hasStall = m_StallSince.Contains(vehicle);
+  vector stallPos = m_StallPos.Get(vehicle);
+  if (!eligible || !wantsToMove || !hasStall || (speed > 1.0 && vector.DistanceXZ(vehicle.GetOrigin(), stallPos) > 5))
+  {
+   if (!eligible || !wantsToMove) m_Unsticks.Remove(vehicle);
+   m_StallPos.Set(vehicle, vehicle.GetOrigin());
+   m_StallSince.Set(vehicle, now);
+   return;
+  }
+
+  float stalled = (now - m_StallSince.Get(vehicle)) / 1000.0;
+  bool fightingVehicle = HasTurret(vehicle);
+  bool armed = HasGunner(vehicle);
+
+  if (underFire && !fightingVehicle && stalled >= STALL_SECONDS_HELPLESS)
+  {
+   if (DismountGroupFromVehicle(group, vehicle, false) > 0)
+    PrintFormat("[BBB] DRIVE %1: stopped under fire (unarmed), crew bails out", BBB.s_Hooks.NameOf(group));
+   ClearStallState(vehicle);
+   return;
+  }
+
+  float limit = STALL_SECONDS;
+  if (underFire || armed) limit = STALL_SECONDS_FIGHTING;
+  if (stalled < limit) return;
+
+  int tries = m_Unsticks.Get(vehicle);
+  if (tries >= UNSTICK_TRIES) return;
+  tries++;
+  m_Unsticks.Set(vehicle, tries);
+  m_Unsticking.Insert(vehicle);
+  float steer = 0.8;
+  if (tries % 2 == 0) steer = -0.8;
+  if (!m_UnstickListener) m_UnstickListener = new BBB_VehicleHelpersUnstick(this);
+  BBB_Unstick.Begin(vehicle, driver, steer, m_UnstickListener);
+  PrintFormat("[BBB] DRIVE %1: stuck, backing up (try %2)", BBB.s_Hooks.NameOf(group), tries);
+ }
+}
+
+class BBB_VehicleHelpersUnstick : BBB_UnstickListener
+{
+ protected BBB_VehicleHelpers m_Owner;
+ void BBB_VehicleHelpersUnstick(BBB_VehicleHelpers owner) { m_Owner = owner; }
+ override void OnUnstickEnded(IEntity vehicle) { if (m_Owner) m_Owner.OnUnstickEnded(vehicle); }
 }

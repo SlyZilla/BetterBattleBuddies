@@ -275,7 +275,8 @@ modded class SCR_DamageManagerComponent
   {
    if (BBB_Armour.s_Watch) BBB_Armour.Watch(GetOwner(), damageContext);
    BBB_Armour.OnVehicleHit(GetOwner(), damageContext);
-   BBB_Transport.OnVehicleHit(GetOwner());
+   if (damageContext.damageType == EDamageType.KINETIC && damageContext.damageSource)
+    BBB_Transport.OnVehicleHit(GetOwner());
   }
   return hijacked;
  }
@@ -286,7 +287,7 @@ modded class SCR_CharacterDamageManagerComponent
  override bool HijackDamageHandling(notnull BaseDamageContext damageContext)
  {
   bool hijacked = super.HijackDamageHandling(damageContext);
-  if (!hijacked && damageContext.damageType == EDamageType.KINETIC)
+  if (!hijacked && damageContext.damageType == EDamageType.KINETIC && damageContext.damageSource)
   {
    ChimeraCharacter me = ChimeraCharacter.Cast(GetOwner());
    if (me && me.IsInVehicle())

@@ -121,10 +121,12 @@ class BBB_Medic
   PrintFormat("[BBB] MEDIC safer healing on=%1 smoke=%2", s_bOn, s_bSmokeOn);
  }
 
- static bool SmokeOn()
+ static bool SmokeOn(IEntity soldier = null)
  {
   Read();
-  return s_bSmokeOn;
+  if (!s_bSmokeOn) return false;
+  if (soldier && s_aVanilla.Contains(soldier)) return false;
+  return true;
  }
 
  static float SmokeAge(IEntity casualty)
@@ -547,7 +549,9 @@ modded class SCR_AIMedicHealBehavior
   // BBB_Drag: move the casualty into cover first (ACE Carrying, when loaded).
   if (BBB_Drag.Busy(healer)) return 0;
   if (BBB_Drag.Consider(m_Utility, healer, casualty, EvaluatePriorityLevel())) return 0;
-  if (!BBB_Medic.On(healer))
+  bool fullOn = BBB_Medic.On(healer);
+  bool smokeOn = BBB_Medic.SmokeOn(healer);
+  if (!fullOn && !smokeOn)
   {
    // Vanilla healing (off, or the test's vanilla side): on his way while this runs.
    if (m_Utility.GetCurrentBehavior() == this) BBB_Medic.MarkGoing(healer, casualty);
@@ -567,9 +571,10 @@ modded class SCR_AIMedicHealBehavior
    if (!exposed) m_fBBBExposedSince = 0;
    else if (m_fBBBExposedSince <= 0) m_fBBBExposedSince = now;
    else if (now - m_fBBBExposedSince > BBB_Medic.EXPOSED_HOLD_S * 1000) exposed = false;
-   bool hot = BBB_Medic.Hot(casualty);
+   bool hot = false;
+   if (fullOn) hot = BBB_Medic.Hot(casualty);
    bool smoking = false;
-   if (BBB_Medic.SmokeOn() && distance > BBB_Medic.ARRIVED_M)
+   if (smokeOn && distance > BBB_Medic.ARRIVED_M)
    {
     if (exposed || hot || threat >= 0.33)
      BBB_Medic.TryDeploySmoke(healer, casualty);
@@ -577,7 +582,11 @@ modded class SCR_AIMedicHealBehavior
     if (smokeAge >= 0 && smokeAge < BBB_Medic.SMOKE_BLOOM_MS)
      smoking = true;
    }
-   int decision = BBB_Medic.Decide(distance, threat, BBB_Medic.Bleeding(healer), exposed, hot, smoking);
+   int decision = BBB_Medic.GO;
+   if (fullOn)
+    decision = BBB_Medic.Decide(distance, threat, BBB_Medic.Bleeding(healer), exposed, hot, smoking);
+   else if (smoking)
+    decision = BBB_Medic.HOLD_SMOKING;
    if (decision != m_iBBBDecision) PrintFormat("[BBB] MEDIC %1 -> %2 at %3 m: %4", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), Math.Round(distance), BBB_Medic.Reason(decision));
    m_iBBBDecision = decision;
   }
@@ -627,7 +636,7 @@ modded class SCR_AIHealActivity
   IEntity casualty = m_EntityToHeal.m_Value;
   if (casualty)
   {
-   bool on = BBB_Medic.On(casualty);
+   bool on = BBB_Medic.On(casualty) || BBB_Medic.SmokeOn(casualty);
    float now = BBB_Medic.NowMs();
    if (m_fBBBBornMs <= 0) m_fBBBBornMs = now;
    if (on && m_fBBBLastMs > 0 && BBB_Medic.HeldLately(casualty) && now - m_fBBBBornMs < BBB_Medic.MAX_HOLD_S * 1000)

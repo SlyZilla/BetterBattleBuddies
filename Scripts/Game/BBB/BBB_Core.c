@@ -29,6 +29,8 @@ class BBB_Hooks : Managed
  bool AllowFireManeuver(SCR_AIGroup group) { return true; }
  // Quiet ordinary travel may lower weapons; host assault/clear orders may veto.
  bool AllowRelaxedMarch(SCR_AIGroup group) { return true; }
+ // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
+ bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Something dropped on the ground that the host may clean up later.
  void OnLitter(IEntity item) {}
 }

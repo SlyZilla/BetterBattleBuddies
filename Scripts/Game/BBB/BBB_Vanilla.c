@@ -5,10 +5,10 @@
 // later (BBB.Start with its own hooks) simply takes over the hooks; BBB.Frame runs once per
 // frame whoever calls it.
 // What works without AC: Actual: everything that hooks the game's AI (aim fixes, gunner
-// drill, small arms vs armour, drag/carry with ACE, safer healing if switched on, bios),
-// plus the ticked helpers over all groups: gates opened ahead of AI vehicles, soldiers set
-// down from truck beds, spent launchers dropped. Not yet: deciding when an AI vehicle is
-// stuck (still in AC: Actual; plan step 3), so BBB_Unstick has no caller here.
+// drill, small arms vs armour, drag/carry with ACE, medic smoke deployment, safer healing
+// if switched on, bios), plus the ticked helpers over all groups: gates opened ahead of AI
+// vehicles, soldiers set down from truck beds, vehicle doors closed, tactical cargo dismount
+// under fire, speed-aware stalled vehicle unstick (BBB_Unstick), and spent launchers dropped.
 // Host option: -bbbVanilla 0 keeps BBB from starting itself.
 class BBB_VanillaHooks : BBB_Hooks
 {
