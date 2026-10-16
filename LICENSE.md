@@ -1,6 +1,8 @@
 # License and credits
 
-**Arma Commander Actual** (AC: Actual) is a derivative work: a port of the Arma 3 mod
+**Better Battle Buddies** is the standalone AI addon extracted from **Arma Commander
+Actual** (AC: Actual) on 15 October 2026. The original attribution and license notices
+below are retained from that project. AC: Actual is a derivative work: a port of the Arma 3 mod
 **Arma Commander** to Arma Reforger.
 
 ## Original work
