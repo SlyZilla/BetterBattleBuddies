@@ -32,12 +32,15 @@ class BBB_VehicleHelpers : Managed
  protected static bool s_bUnstick = true;
  protected static bool s_bTacticalDismount = true;
  static bool s_bGunnerReplace = true;
+ // Counts accepted native boarding requests, not confirmed occupied seats.
  static int s_iGunnerReplacements;
+ protected static bool s_bSeatTrace;
  protected static ref array<IEntity> s_aReplacingVehicles = {};
 
  void BBB_VehicleHelpers()
  {
   s_iGunnerReplacements = 0;
+  s_bSeatTrace = System.IsCLIParam("bbbTurretTrace");
   string val;
   if (System.GetCLIParam("bbbDoors", val) && val == "0") s_bDoors = false;
   if (System.GetCLIParam("bbbUnstick", val) && val == "0") s_bUnstick = false;
@@ -397,6 +400,21 @@ class BBB_VehicleHelpers : Managed
   return false;
  }
 
+ // Opt-in transition evidence. Request acceptance is not confirmed occupancy.
+ static void SeatTrace(string stage, IEntity vehicle, BaseCompartmentSlot slot, ChimeraCharacter candidate, int retry = 0, bool accepted = false)
+ {
+  if (!s_bSeatTrace) return;
+  IEntity occupant = null;
+  if (slot) occupant = slot.GetOccupant();
+  if (candidate && candidate.GetCompartmentAccessComponent())
+  {
+   CompartmentAccessComponent access = candidate.GetCompartmentAccessComponent();
+   PrintFormat("[BBB] SEATTRACE actor inVehicle=%1 entering=%2 exiting=%3 compartment=%4", candidate.IsInVehicle(), access.IsGettingIn(), access.IsGettingOut(), access.GetCompartment());
+  }
+  if (slot) PrintFormat("[BBB] SEATTRACE slot name=%1 owner=%2 vehicle=%3", slot.GetCompartmentName(), slot.GetOwner(), slot.GetVehicle());
+  PrintFormat("[BBB] SEATTRACE t=%1 stage=%2 vehicle=%3 candidate=%4 occupant=%5 retry=%6 accepted=%7", GetGame().GetWorld().GetWorldTime(), stage, vehicle, candidate, occupant, retry, accepted);
+ }
+
  protected static bool EjectFromCompartment(IEntity vehicle, ChimeraCharacter ch)
  {
   if (!vehicle || !ch) return false;
@@ -404,6 +422,7 @@ class BBB_VehicleHelpers : Managed
   if (!acc) return false;
   BaseCompartmentSlot curSlot = acc.GetCompartment();
   if (!curSlot && !ch.IsInVehicle()) return true;
+  SeatTrace("eject-before", vehicle, curSlot, ch);
   bool ok = acc.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
   if (!ok)
   {
@@ -413,6 +432,7 @@ class BBB_VehicleHelpers : Managed
    ejectMat[3] = BBB.Ground(vehicle.GetOrigin() + side * 2.5);
    acc.GetOutVehicle_NoDoor(ejectMat, false, false);
   }
+  SeatTrace("eject-request", vehicle, curSlot, ch, 0, ok);
   return true;
  }
 
@@ -429,6 +449,7 @@ class BBB_VehicleHelpers : Managed
 
  static void DoSeatInTurret(IEntity vehicle, BaseCompartmentSlot slot, ChimeraCharacter candidate, SCR_AIGroup group, int retries = 0)
  {
+  SeatTrace("seat-attempt", vehicle, slot, candidate, retries);
   if (!vehicle || !slot || !candidate || !IsAble(candidate))
   {
    s_aReplacingVehicles.RemoveItem(vehicle);
@@ -447,6 +468,7 @@ class BBB_VehicleHelpers : Managed
     GetGame().GetCallqueue().CallLater(DoSeatInTurret, 40, false, vehicle, slot, candidate, group, retries + 1);
     return;
    }
+   SeatTrace("abandon-transition", vehicle, slot, candidate, retries);
    s_aReplacingVehicles.RemoveItem(vehicle);
    return;
   }
@@ -471,12 +493,14 @@ class BBB_VehicleHelpers : Managed
   IEntity targetVeh = slot.GetVehicle();
   if (!targetVeh) targetVeh = vehicle;
   if (!targetVeh) targetVeh = slot.GetOwner();
+  SeatTrace("get-in-target", targetVeh, slot, candidate, retries);
   bool ok = acc.GetInVehicle(targetVeh, slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
   if (!ok && targetVeh != vehicle && vehicle)
    ok = acc.GetInVehicle(vehicle, slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
   if (!ok && targetVeh != slot.GetOwner() && slot.GetOwner())
    ok = acc.GetInVehicle(slot.GetOwner(), slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
 
+  SeatTrace("get-in-return", vehicle, slot, candidate, retries, ok);
   if (!ok && retries < 8)
   {
    GetGame().GetCallqueue().CallLater(DoSeatInTurret, 50, false, vehicle, slot, candidate, group, retries + 1);
@@ -493,7 +517,7 @@ class BBB_VehicleHelpers : Managed
    if (ai && !ai.IsAIActivated()) ai.ActivateAI();
    string gName = "vehicle";
    if (group) gName = BBB.s_Hooks.NameOf(group);
-   PrintFormat("[BBB] TURRET %1: promoted passenger %2 into %3", gName, candidate, slot.GetCompartmentName());
+   PrintFormat("[BBB] TURRET %1: boarding request accepted for %2 into %3", gName, candidate, slot.GetCompartmentName());
   }
  }
 
@@ -600,6 +624,7 @@ class BBB_VehicleHelpers : Managed
 
   if (!candidate) return false;
 
+  SeatTrace("selected", vehicle, targetTurret, candidate);
   bool needsEject = false;
   if (targetTurret.GetOccupant())
   {

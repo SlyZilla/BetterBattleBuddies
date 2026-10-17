@@ -529,36 +529,81 @@ class BBB_VanillaTest
  static bool s_bSetupOK;
  static bool s_bAmmoOK;
  static bool s_bPromote1OK;
+ static IEntity s_FirstObservedGunner;
+ static float s_fSeatDeadline;
+ static int s_iSecondPhaseRequests;
+ static bool s_bDownObserved;
+
+ // Confirm fresh native seat occupancy by a fit member. Identity and accepted
+ // request counters cannot stand in for an actually occupied turret.
+ static IEntity ObservedGunner(SCR_AIGroup group)
+ {
+  if (!group || !s_SpawnedTruck) return null;
+  array<AIAgent> members = {};
+  group.GetAgents(members);
+  array<BaseCompartmentSlot> turrets = {};
+  BBB_VehicleHelpers.GetVehicleCompartments(s_SpawnedTruck, turrets, ECompartmentType.TURRET);
+  foreach (BaseCompartmentSlot slot : turrets)
+  {
+   IEntity occupant = slot.GetOccupant();
+   if (!BBB_VehicleHelpers.IsAble(occupant) || BBB.PlayerOf(occupant)) continue;
+   foreach (AIAgent member : members)
+    if (member && member.GetControlledEntity() == occupant) return occupant;
+  }
+  return null;
+ }
+
 
  static void TestGunnerStep2(SCR_AIGroup mine)
  {
-  s_iBeforeReplacements = BBB_VehicleHelpers.s_iGunnerReplacements;
+  // Twenty seconds allows the normal eight-second retry and native transitions.
+  s_fSeatDeadline = GetGame().GetWorld().GetWorldTime() + 20000;
   bool prom1 = BBB_VehicleHelpers.TryReplaceGunner(s_SpawnedTruck, mine);
-  GetGame().GetCallqueue().CallLater(TestGunnerStep3, 1200, false, mine, prom1);
+  GetGame().GetCallqueue().CallLater(TestGunnerStep3, 100, false, mine, prom1);
  }
 
  static void TestGunnerStep3(SCR_AIGroup mine, bool prom1)
  {
-  IEntity occNow = s_TurretSlot.GetOccupant();
-  s_bPromote1OK = prom1 && occNow == s_Man1 && BBB_VehicleHelpers.HasGunner(s_SpawnedTruck) && BBB_VehicleHelpers.s_iGunnerReplacements == s_iBeforeReplacements + 1;
-  SCR_CharacterDamageManagerComponent dmg1 = SCR_CharacterDamageManagerComponent.Cast(s_Man1.GetDamageManager());
+  IEntity occupant = ObservedGunner(mine);
+  s_bPromote1OK = occupant != null && BBB_VehicleHelpers.s_iGunnerReplacements > s_iBeforeReplacements;
+  if (!s_bPromote1OK && GetGame().GetWorld().GetWorldTime() < s_fSeatDeadline)
+  {
+   GetGame().GetCallqueue().CallLater(TestGunnerStep3, 100, false, mine, prom1);
+   return;
+  }
+  PrintFormat("[BBB] TURRET first requested=%1 occupied=%2 actor=%3 acceptedRequests=%4", prom1, s_bPromote1OK, occupant, BBB_VehicleHelpers.s_iGunnerReplacements - s_iBeforeReplacements);
+  if (!s_bPromote1OK) { s_fSeatDeadline = 0; FinishVanillaTest(mine, false, false); return; }
+  s_FirstObservedGunner = occupant;
+  s_iSecondPhaseRequests = BBB_VehicleHelpers.s_iGunnerReplacements;
+  // A retry can choose a different passenger. Kill the observed gunner, rather
+  // than an expected actor who might never have taken the seat.
+  SCR_DamageManagerComponent dmg1 = SCR_DamageManagerComponent.GetDamageManager(occupant);
   if (dmg1) dmg1.Kill(Instigator.CreateInstigator(null));
-
   GetGame().GetCallqueue().CallLater(TestGunnerStep4, 500, false, mine);
  }
 
  static void TestGunnerStep4(SCR_AIGroup mine)
  {
-  bool recognizedDown = !BBB_VehicleHelpers.HasGunner(s_SpawnedTruck);
+  // Kill, like boarding, is processed asynchronously. Confirm casualty state
+  // here after the native update, rather than immediately after requesting it.
+  s_bDownObserved = !BBB_VehicleHelpers.IsAble(s_FirstObservedGunner);
+  s_fSeatDeadline = GetGame().GetWorld().GetWorldTime() + 20000;
   bool prom2 = BBB_VehicleHelpers.TryReplaceGunner(s_SpawnedTruck, mine);
-  GetGame().GetCallqueue().CallLater(FinishVanillaTest, 1600, false, mine, recognizedDown, prom2);
+  GetGame().GetCallqueue().CallLater(FinishVanillaTest, 100, false, mine, s_bDownObserved, prom2);
  }
 
  static void FinishVanillaTest(SCR_AIGroup mine, bool recognizedDown, bool prom2)
  {
-  IEntity occNow = s_TurretSlot.GetOccupant();
-  bool downReplaceOK = recognizedDown && prom2 && occNow == s_Man2 && BBB_VehicleHelpers.HasGunner(s_SpawnedTruck) && BBB_VehicleHelpers.s_iGunnerReplacements == s_iBeforeReplacements + 2;
+  if (s_bPromote1OK) recognizedDown = !BBB_VehicleHelpers.IsAble(s_FirstObservedGunner);
+  IEntity occupant = ObservedGunner(mine);
+  bool downReplaceOK = recognizedDown && occupant != null && occupant != s_FirstObservedGunner && BBB_VehicleHelpers.s_iGunnerReplacements > s_iSecondPhaseRequests;
+  if (!downReplaceOK && GetGame().GetWorld().GetWorldTime() < s_fSeatDeadline)
+  {
+   GetGame().GetCallqueue().CallLater(FinishVanillaTest, 100, false, mine, recognizedDown, prom2);
+   return;
+  }
   bool turretOK = s_bSetupOK && s_bAmmoOK && s_bPromote1OK && downReplaceOK;
+  PrintFormat("[BBB] TURRET second down=%1 requested=%2 occupied=%3 actor=%4", recognizedDown, prom2, downReplaceOK, occupant);
   PrintFormat("[BBB] TURRET regression ok=%1 setup=%2 ammo=%3 emptyPromote=%4 downReplace=%5", turretOK, s_bSetupOK, s_bAmmoOK, s_bPromote1OK, downReplaceOK);
 
   bool found = mine != null;
@@ -620,6 +665,10 @@ class BBB_VanillaTest
   s_bSetupOK = s_SpawnedTruck != null && !pilots.IsEmpty() && !turrets.IsEmpty() && cargos.Count() >= 2;
   s_bAmmoOK = false;
   s_bPromote1OK = false;
+  s_FirstObservedGunner = null;
+  s_bDownObserved = false;
+  s_fSeatDeadline = 0;
+  s_iBeforeReplacements = BBB_VehicleHelpers.s_iGunnerReplacements;
 
   if (s_bSetupOK)
   {
