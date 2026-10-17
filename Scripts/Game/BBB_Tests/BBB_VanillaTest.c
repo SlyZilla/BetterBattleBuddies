@@ -18,8 +18,28 @@ class BBB_VanillaTest
   }
   parameters.Transform[3] = BBB.Ground(spawnAt);
   IEntity spawned = GetGame().SpawnEntityPrefab(resource, GetGame().GetWorld(), parameters);
+  if (System.IsCLIParam("bbbRearmTest"))
+  {
+   GetGame().GetCallqueue().CallLater(FinishRearmOnly, 3000, false, spawned);
+   return;
+  }
+  // Rearm mutates inventory and native orders; keep it off the crew fixture.
+  s_RearmGroup = SpawnRearmFixture("{657590C1EC9E27D3}Prefabs/Groups/OPFOR/Group_USSR_LightFireTeam.et", BBB.Ground(parameters.Transform[3] + Vector(60, 0, 0)));
   int frames = BBB.s_iFrames;
   GetGame().GetCallqueue().CallLater(TestEnd, 3000, false, frames, spawned);
+ }
+
+ // Dedicated feature verdict: the full vanilla preset also covers independent
+ // vehicle fixtures, whose asynchronous occupancy checks can fail separately.
+ static void FinishRearmOnly(IEntity spawned)
+ {
+  SCR_AIGroup group = SCR_AIGroup.Cast(spawned);
+  bool ok = BBB.IsStarted() && BBB_VanillaHooks.Cast(BBB.s_Hooks) && TestRearm(group);
+  string verdict = "FAIL";
+  if (ok) verdict = "PASS";
+  PrintFormat("[ACR] VERDICT %1 test=bbbrearm", verdict);
+  if (spawned) SCR_EntityHelper.DeleteEntityAndChildren(spawned);
+  Print("[ACR] TEST COMPLETE");
  }
 
  static bool TestSelector(SCR_AIGroup group)
@@ -237,6 +257,152 @@ class BBB_VanillaTest
   return ok;
  }
 
+ static IEntity SpawnRearmFixture(ResourceName prefab, vector position)
+ {
+  Resource resource = Resource.Load(prefab);
+  if (!resource.IsValid()) return null;
+  EntitySpawnParams spawnParams = new EntitySpawnParams();
+  spawnParams.TransformMode = ETransformMode.WORLD;
+  spawnParams.Transform[3] = position;
+  return GetGame().SpawnEntityPrefab(resource, GetGame().GetWorld(), spawnParams);
+ }
+
+ static bool RearmSafety(ChimeraCharacter soldier, IEntity corpse, SCR_AIGroup group, BaseMuzzleComponent muzzle)
+ {
+  vector original = corpse.GetOrigin();
+  int before = BBB_Rearm.s_iMagazinesLooted;
+  corpse.SetOrigin(soldier.GetOrigin() + Vector(0, 3, 0));
+  bool height = !BBB_Rearm.CanLoot(soldier, corpse) && !BBB_Rearm.LootFromCorpse(soldier, corpse, true, muzzle, false, group);
+  corpse.SetOrigin(soldier.GetOrigin() + Vector(5, 0, 0));
+  bool distance = !BBB_Rearm.LootFromCorpse(soldier, corpse, true, muzzle, false, group);
+  corpse.SetOrigin(original);
+  IEntity wall = SpawnRearmFixture("{5EF52FAE299A831A}Prefabs/Props/Military/Sandbags/Sandbag_01_short_base.et", (soldier.GetOrigin() + original) * 0.5);
+  bool obstruction = wall && !BBB_Rearm.CanLoot(soldier, corpse) && !BBB_Rearm.LootFromCorpse(soldier, corpse, true, muzzle, false, group);
+  if (wall) SCR_EntityHelper.DeleteEntityAndChildren(wall);
+  bool unchanged = BBB_Rearm.s_iMagazinesLooted == before;
+  float nowMs = GetGame().GetWorld().GetWorldTime();
+  BBB_Rearm.RecordFailure(soldier, corpse, nowMs);
+  bool retry = !BBB_Rearm.BodyBlocked(soldier, corpse);
+  BBB_Rearm.RecordFailure(soldier, corpse, nowMs);
+  retry = retry && BBB_Rearm.BodyBlocked(soldier, corpse);
+  BBB_Rearm.PruneFailures(nowMs + BBB_Rearm.FAILURE_BACKOFF_MS + 1);
+  retry = retry && !BBB_Rearm.BodyBlocked(soldier, corpse);
+  AIControlComponent control = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
+  SCR_AIUtilityComponent utility = null;
+  if (control && control.GetAIAgent()) utility = SCR_AIUtilityComponent.Cast(control.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
+  bool orders = false;
+  bool timeout = false;
+  bool roster = false;
+  if (utility)
+  {
+   BBB_OrderIntentTestHold hold = new BBB_OrderIntentTestHold(utility, null);
+   utility.AddAction(hold);
+   SCR_AIMoveIndividuallyBehavior trip = new SCR_AIMoveIndividuallyBehavior(utility, null, original, priority: 50);
+   BBB_Rearm.SetRearmActionForTest(soldier, trip, corpse);
+   BBB_Rearm.CheckRearmFor(group);
+   orders = !BBB_Rearm.InRearmAction(soldier) && trip.GetActionState() == EAIActionState.FAILED && !BBB_Rearm.LootFromCorpse(soldier, corpse, true, muzzle, false, group);
+   hold.Fail();
+   corpse.SetOrigin(soldier.GetOrigin() + Vector(10, 0, 0));
+   SCR_AIMoveIndividuallyBehavior stalled = new SCR_AIMoveIndividuallyBehavior(utility, null, corpse.GetOrigin(), priority: 50);
+   BBB_Rearm.SetRearmActionForTest(soldier, stalled, corpse);
+   timeout = !BBB_Rearm.ExpireTrip(soldier, nowMs) && BBB_Rearm.ExpireTrip(soldier, nowMs + BBB_Rearm.TRIP_TIMEOUT_MS + 1) && stalled.GetActionState() == EAIActionState.FAILED && !BBB_Rearm.InRearmAction(soldier);
+   BBB_Rearm.PruneFailures(nowMs + BBB_Rearm.TRIP_TIMEOUT_MS + BBB_Rearm.FAILURE_BACKOFF_MS + 2);
+   corpse.SetOrigin(original);
+   SCR_AIMoveIndividuallyBehavior removed = new SCR_AIMoveIndividuallyBehavior(utility, null, original, priority: 50);
+   BBB_Rearm.SetRearmActionForTest(soldier, removed, corpse);
+   array<SCR_AIGroup> emptyRoster = {};
+   BBB_Rearm.WatchTrips(emptyRoster);
+   roster = !BBB_Rearm.InRearmAction(soldier) && removed.GetActionState() == EAIActionState.FAILED;
+  }
+  PrintFormat("[BBB] REARM safety height=%1 distance=%2 obstruction=%3 unchanged=%4 retries=%5 orders=%6 timeout=%7 roster=%8", height, distance, obstruction, unchanged, retry, orders, timeout, roster);
+  return height && distance && obstruction && unchanged && retry && orders && timeout && roster;
+ }
+
+ static bool RearmLauncher(ChimeraCharacter soldier, SCR_AIGroup group)
+ {
+  IEntity donor = SpawnRearmFixture("{1C78331E156A3D65}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_AT.et", soldier.GetOrigin() + Vector(1.5, 0, 0));
+  if (!donor) return false;
+  SCR_DamageManagerComponent dmg = SCR_DamageManagerComponent.GetDamageManager(donor);
+  if (dmg) dmg.Kill(Instigator.CreateInstigator(null));
+  IEntity launcher;
+  array<IEntity> rockets = {};
+  bool found = BBB_Rearm.CorpseHasAT(donor, launcher, rockets);
+  bool compatible = found && !rockets.IsEmpty();
+  BaseWeaponComponent weapon = null;
+  if (launcher) weapon = BaseWeaponComponent.Cast(launcher.FindComponent(BaseWeaponComponent));
+  array<BaseMuzzleComponent> muzzles = {};
+  if (weapon) weapon.GetMuzzlesList(muzzles);
+  foreach (IEntity rocket : rockets)
+  {
+   bool matches = false;
+   foreach (BaseMuzzleComponent muzzle : muzzles)
+   {
+    array<IEntity> matching = {};
+    BBB_Rearm.CorpseHasMatchingMag(donor, muzzle, matching);
+    if (matching.Contains(rocket)) matches = true;
+   }
+   compatible = compatible && matches;
+  }
+  int before = BBB_Rearm.s_iLaunchersLooted;
+  bool looted = BBB_Rearm.LootFromCorpse(soldier, donor, false, null, true, group);
+  bool operational = looted && BBB_Rearm.s_iLaunchersLooted == before + 1 && BBB_Armour.HasOperationalAT(soldier);
+  // Restore the original kit so the anti-armor fixture still starts without AT.
+  SCR_InventoryStorageManagerComponent inv = SCR_InventoryStorageManagerComponent.Cast(soldier.FindComponent(SCR_InventoryStorageManagerComponent));
+  array<IEntity> acquiredItems = {};
+  inv.GetItems(acquiredItems);
+  if (launcher && acquiredItems.Contains(launcher))
+  {
+   inv.TryRemoveItemFromInventory(launcher);
+   SCR_EntityHelper.DeleteEntityAndChildren(launcher);
+  }
+  foreach (IEntity acquiredRocket : rockets)
+  {
+   if (!acquiredRocket || !acquiredItems.Contains(acquiredRocket)) continue;
+   inv.TryRemoveItemFromInventory(acquiredRocket);
+   SCR_EntityHelper.DeleteEntityAndChildren(acquiredRocket);
+  }
+  SCR_EntityHelper.DeleteEntityAndChildren(donor);
+  PrintFormat("[BBB] REARM launcher found=%1 compatible=%2 operational=%3", found, compatible, operational);
+  return found && compatible && operational;
+ }
+
+ static bool RearmTransferFailure(ChimeraCharacter soldier, BaseMuzzleComponent muzzle)
+ {
+  IEntity donor = SpawnRearmFixture("{DCB41B3746FDD1BE}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_Rifleman.et", soldier.GetOrigin() + Vector(1.5, 0, 0));
+  if (!donor) return false;
+  array<IEntity> mags = {};
+  BBB_Rearm.CorpseHasMatchingMag(donor, muzzle, mags);
+  if (mags.IsEmpty()) { SCR_EntityHelper.DeleteEntityAndChildren(donor); return false; }
+  IEntity item = mags[0];
+  InventoryItemComponent itemComp = InventoryItemComponent.Cast(item.FindComponent(InventoryItemComponent));
+  BaseInventoryStorageComponent source = itemComp.GetParentSlot().GetStorage();
+  SCR_InventoryStorageManagerComponent inv = SCR_InventoryStorageManagerComponent.Cast(soldier.FindComponent(SCR_InventoryStorageManagerComponent));
+  array<IEntity> fillers = {};
+  bool full = false;
+  for (int i = 0; i < 128; i++)
+  {
+   IEntity filler = SpawnRearmFixture(item.GetPrefabData().GetPrefabName(), soldier.GetOrigin());
+   if (!filler) break;
+   if (!inv.TryInsertItem(filler))
+   {
+    full = true;
+    SCR_EntityHelper.DeleteEntityAndChildren(filler);
+    break;
+   }
+   fillers.Insert(filler);
+  }
+  bool failed = full && !BBB_Rearm.TransferItem(inv, item, donor);
+  bool restored = itemComp.GetParentSlot() && itemComp.GetParentSlot().GetStorage() == source;
+  foreach (IEntity inserted : fillers)
+  {
+   inv.TryRemoveItemFromInventory(inserted);
+   SCR_EntityHelper.DeleteEntityAndChildren(inserted);
+  }
+  SCR_EntityHelper.DeleteEntityAndChildren(donor);
+  PrintFormat("[BBB] REARM insertion full=%1 refused=%2 restored=%3", full, failed, restored);
+  return full && failed && restored;
+ }
+
  static bool TestRearm(SCR_AIGroup group)
  {
   if (!group) return false;
@@ -290,6 +456,7 @@ class BBB_VanillaTest
 
   bool matchingMag = false;
   bool looted = false;
+  bool safety = false;
   if (corpse)
   {
    SCR_DamageManagerComponent dmg = SCR_DamageManagerComponent.GetDamageManager(corpse);
@@ -298,6 +465,7 @@ class BBB_VanillaTest
    array<IEntity> mags = {};
    matchingMag = BBB_Rearm.CorpseHasMatchingMag(corpse, muzzle, mags);
 
+   safety = RearmSafety(testMan, corpse, group, muzzle);
    int beforeLooted = BBB_Rearm.s_iMagazinesLooted;
    BBB_Rearm.LootFromCorpse(testMan, corpse, true, muzzle, false, group);
    looted = BBB_Rearm.s_iMagazinesLooted > beforeLooted;
@@ -325,8 +493,10 @@ class BBB_VanillaTest
   }
   bool atTriggerOK = !needsATBefore && needsATWithVeh;
 
-  SCR_AIUtilityComponent testUtil = SCR_AIUtilityComponent.Cast(testMan.FindComponent(SCR_AIUtilityComponent));
-  bool cancelOK = true;
+  AIControlComponent testControl = AIControlComponent.Cast(testMan.FindComponent(AIControlComponent));
+  SCR_AIUtilityComponent testUtil = null;
+  if (testControl && testControl.GetAIAgent()) testUtil = SCR_AIUtilityComponent.Cast(testControl.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
+  bool cancelOK = false;
   if (testUtil)
   {
    SCR_AIMoveIndividuallyBehavior dummyAct = new SCR_AIMoveIndividuallyBehavior(testUtil, null, testMan.GetOrigin(), priority: 50);
@@ -335,7 +505,9 @@ class BBB_VanillaTest
    cancelOK = !BBB_Rearm.InRearmAction(testMan) && dummyAct.GetActionState() == EAIActionState.FAILED;
   }
 
-  bool ok = muzzle != null && needed && matchingMag && looted && atTriggerOK && cancelOK;
+  bool launcherOK = RearmLauncher(testMan, group);
+  bool insertionOK = RearmTransferFailure(testMan, muzzle);
+  bool ok = insertionOK && muzzle != null && needed && matchingMag && looted && atTriggerOK && cancelOK && safety && launcherOK;
   PrintFormat("[BBB] REARM regression ok=%1 needed=%2 matchingMag=%3 looted=%4 atTrigger=%5 cancel=%6", ok, needed, matchingMag, looted, atTriggerOK, cancelOK);
   return ok;
  }
@@ -345,6 +517,7 @@ class BBB_VanillaTest
  static bool s_bAntiArmorOK;
  static bool s_bRearmOK;
  static int s_iFramesCounted;
+ static IEntity s_RearmGroup;
  static IEntity s_SpawnedGroup;
  static IEntity s_SpawnedTruck;
  static BaseCompartmentSlot s_TurretSlot;
@@ -412,7 +585,8 @@ class BBB_VanillaTest
 
   s_bSelectorOK = TestSelector(mine);
   s_bThreatOK = TestThreat(mine);
-  s_bRearmOK = TestRearm(mine);
+  s_bRearmOK = TestRearm(SCR_AIGroup.Cast(s_RearmGroup));
+  if (s_RearmGroup) SCR_EntityHelper.DeleteEntityAndChildren(s_RearmGroup);
 
   array<AIAgent> agents = {};
   if (mine) mine.GetAgents(agents);
@@ -473,7 +647,7 @@ modded class SCR_BaseGameMode
  protected override void OnGameStart()
  {
   super.OnGameStart();
-  if (Replication.IsServer() && (System.IsCLIParam("bbbVanillaTest") || System.IsCLIParam("acrBbbVanillaTest")))
+  if (Replication.IsServer() && (System.IsCLIParam("bbbVanillaTest") || System.IsCLIParam("acrBbbVanillaTest") || System.IsCLIParam("bbbRearmTest")))
    GetGame().GetCallqueue().CallLater(BBB_VanillaTest.Test, 25000);
  }
 }

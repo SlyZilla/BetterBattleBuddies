@@ -4,6 +4,15 @@
 // (< 2 magazines) or face armored threats without operational AT, they search nearby
 // corpses and supply sources within 25 m to scavenge ammunition and AT weapons.
 
+// Failure history is per soldier/body, expires, and has a fixed memory bound.
+class BBB_RearmFailure
+{
+ ChimeraCharacter m_Soldier;
+ IEntity m_Corpse;
+ int m_Attempts;
+ float m_Until;
+}
+
 class BBB_Rearm
 {
  static bool s_bOn = true;
@@ -14,6 +23,11 @@ class BBB_Rearm
 
  static float s_fSearchRadius = 25.0;
  static const float LOOT_REACH_M = 3.5;
+ static const float LOOT_HEIGHT_M = 1.5;
+ static const float TRIP_TIMEOUT_MS = 20000.0;
+ static const float FAILURE_BACKOFF_MS = 60000.0;
+ static const int MAX_BODY_ATTEMPTS = 2;
+ static const int MAX_FAILURE_RECORDS = 128;
  static const float REARM_COOLDOWN_MS = 15000.0;
  static const int TARGET_MAGAZINE_COUNT = 4;
  static const int CRITICAL_MAGAZINE_COUNT = 2;
@@ -21,6 +35,8 @@ class BBB_Rearm
  protected static ref map<IEntity, float> s_mNextRearmCheck = new map<IEntity, float>();
  protected static ref map<IEntity, IEntity> s_mTargetCorpse = new map<IEntity, IEntity>();
  protected static ref map<ChimeraCharacter, ref SCR_AIMoveIndividuallyBehavior> s_mRearmAction = new map<ChimeraCharacter, ref SCR_AIMoveIndividuallyBehavior>();
+ protected static ref map<ChimeraCharacter, float> s_mTripStarted = new map<ChimeraCharacter, float>();
+ protected static ref array<ref BBB_RearmFailure> s_aFailures = {};
  protected static ref array<IEntity> s_aQueryCorpseHits = {};
 
  static void Read()
@@ -125,6 +141,22 @@ class BBB_Rearm
   return !outMags.IsEmpty();
  }
 
+ // Use the launcher's actual muzzle wells, including mod-defined wells. No name heuristics.
+ static bool LauncherLoaded(BaseWeaponComponent weapon)
+ {
+  if (!weapon) return false;
+  array<BaseMuzzleComponent> muzzles = {};
+  weapon.GetMuzzlesList(muzzles);
+  foreach (BaseMuzzleComponent muzzle : muzzles)
+  {
+   if (!muzzle) continue;
+   if (muzzle.GetAmmoCount() > 0) return true;
+   BaseMagazineComponent mag = muzzle.GetMagazine();
+   if (mag && mag.GetAmmoCount() > 0) return true;
+  }
+  return false;
+ }
+
  static bool CorpseHasAT(IEntity corpse, out IEntity outLauncher, notnull array<IEntity> outRockets)
  {
   outLauncher = null;
@@ -138,20 +170,56 @@ class BBB_Rearm
   {
    if (!item) continue;
    BaseWeaponComponent weapon = BaseWeaponComponent.Cast(item.FindComponent(BaseWeaponComponent));
-   if (weapon && weapon.GetWeaponType() == EWeaponType.WT_ROCKETLAUNCHER)
+   if (!weapon || weapon.GetWeaponType() != EWeaponType.WT_ROCKETLAUNCHER) continue;
+   array<BaseMuzzleComponent> muzzles = {};
+   weapon.GetMuzzlesList(muzzles);
+   array<IEntity> rockets = {};
+   foreach (BaseMuzzleComponent muzzle : muzzles)
    {
-    if (!outLauncher) outLauncher = item;
+    SCR_MuzzleInMagComponent projectileMuzzle = SCR_MuzzleInMagComponent.Cast(muzzle);
+    if (projectileMuzzle && !projectileMuzzle.CanBeReloaded()) continue;
+    array<IEntity> matching = {};
+    CorpseHasMatchingMag(corpse, muzzle, matching);
+    foreach (IEntity rocket : matching)
+    {
+     // A magazine already inside the launcher travels with it.
+     if (muzzle.GetMagazine() && muzzle.GetMagazine().GetOwner() == rocket) continue;
+     if (!rockets.Contains(rocket)) rockets.Insert(rocket);
+    }
    }
-   MagazineComponent mag = MagazineComponent.Cast(item.FindComponent(MagazineComponent));
-   if (mag && mag.GetMagazineWell())
-   {
-    string wellName = mag.GetMagazineWell().Type().ToString();
-    wellName.ToLower();
-    if (wellName.Contains("rpg") || wellName.Contains("rocket") || wellName.Contains("law"))
-     outRockets.Insert(item);
-   }
+   if (!LauncherLoaded(weapon) && rockets.IsEmpty()) continue;
+   outLauncher = item;
+   outRockets.Copy(rockets);
+   return true;
   }
-  return outLauncher != null;
+  return false;
+ }
+
+ // Enforce geometry at the transfer boundary too, so callers cannot bypass it.
+ static bool CanLoot(ChimeraCharacter soldier, IEntity corpse)
+ {
+  if (!soldier || !corpse) return false;
+  vector from = soldier.GetOrigin();
+  vector to = corpse.GetOrigin();
+  if (vector.Distance(from, to) > LOOT_REACH_M || Math.AbsFloat(from[1] - to[1]) > LOOT_HEIGHT_M) return false;
+  TraceParam trace = new TraceParam();
+  trace.Start = from + Vector(0, 0.8, 0);
+  trace.End = to + Vector(0, 0.3, 0);
+  trace.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+  array<IEntity> excluded = {soldier, corpse};
+  trace.ExcludeArray = excluded;
+  return GetGame().GetWorld().TraceMove(trace, null) >= 0.999;
+ }
+
+ static void RestoreItem(InventoryStorageManagerComponent sourceInv, BaseInventoryStorageComponent sourceStorage, IEntity item, vector fallback)
+ {
+  if (!item) return;
+  InventoryItemComponent itemComp = InventoryItemComponent.Cast(item.FindComponent(InventoryItemComponent));
+  if (itemComp && itemComp.GetParentSlot()) return;
+  if (sourceInv && sourceStorage && sourceInv.TryInsertItemInStorage(item, sourceStorage)) return;
+  if (sourceInv && sourceInv.TryInsertItem(item)) return;
+  // Keep a detached item physically available if its original storage disappeared/filled.
+  item.SetOrigin(fallback + Vector(0, 0.2, 0));
  }
 
  static bool TransferItem(SCR_InventoryStorageManagerComponent soldierInv, IEntity item, IEntity corpse = null)
@@ -160,11 +228,19 @@ class BBB_Rearm
   InventoryItemComponent itemComp = InventoryItemComponent.Cast(item.FindComponent(InventoryItemComponent));
   InventoryStorageSlot slot = null;
   if (itemComp) slot = itemComp.GetParentSlot();
-  if (corpse && slot && slot.GetStorage())
+  BaseInventoryStorageComponent sourceStorage = null;
+  if (slot) sourceStorage = slot.GetStorage();
+  InventoryStorageManagerComponent corpseInv = null;
+  vector fallback = item.GetOrigin();
+  if (corpse)
   {
-   InventoryStorageManagerComponent corpseInv = InventoryStorageManagerComponent.Cast(corpse.FindComponent(InventoryStorageManagerComponent));
-   if (corpseInv) corpseInv.TryRemoveItemFromStorage(item, slot.GetStorage());
+   fallback = corpse.GetOrigin();
+   corpseInv = InventoryStorageManagerComponent.Cast(corpse.FindComponent(InventoryStorageManagerComponent));
   }
+  // Prefer an atomic storage move; some equipped corpse slots require explicit removal.
+  BaseInventoryStorageComponent destination = soldierInv.FindStorageForItem(item, EStoragePurpose.PURPOSE_ANY);
+  if (destination && soldierInv.TryMoveItemToStorage(item, destination)) return true;
+  if (sourceStorage && (!corpseInv || !corpseInv.TryRemoveItemFromStorage(item, sourceStorage))) return false;
   bool ok = soldierInv.TryInsertItem(item, EStoragePurpose.PURPOSE_DEPOSIT);
   if (!ok) ok = soldierInv.TryInsertItem(item, EStoragePurpose.PURPOSE_ANY);
   if (!ok)
@@ -173,12 +249,54 @@ class BBB_Rearm
    if (!target) target = soldierInv.FindStorageForItem(item, EStoragePurpose.PURPOSE_ANY);
    if (target) ok = soldierInv.TryMoveItemToStorage(item, target);
   }
+  if (!ok) RestoreItem(corpseInv, sourceStorage, item, fallback);
   return ok;
+ }
+
+ // Only use a free weapon slot; EquipWeapon may replace the active rifle via a
+ // chained drop operation. Failed insertion restores the launcher to the body.
+ static bool EquipLauncher(SCR_InventoryStorageManagerComponent inv, IEntity launcher, IEntity corpse)
+ {
+  array<BaseInventoryStorageComponent> storages = {};
+  inv.GetStorages(storages, EStoragePurpose.PURPOSE_WEAPON_PROXY);
+  InventoryItemComponent itemComp = InventoryItemComponent.Cast(launcher.FindComponent(InventoryItemComponent));
+  BaseInventoryStorageComponent source = null;
+  if (itemComp && itemComp.GetParentSlot()) source = itemComp.GetParentSlot().GetStorage();
+  InventoryStorageManagerComponent corpseInv = InventoryStorageManagerComponent.Cast(corpse.FindComponent(InventoryStorageManagerComponent));
+  // Corpses may disallow direct storage moves. As for magazines, detach once
+  // and restore on failure, without replacing any weapon the soldier carries.
+  if (source && (!corpseInv || !corpseInv.TryRemoveItemFromStorage(launcher, source))) return false;
+  foreach (BaseInventoryStorageComponent storage : storages)
+  {
+   for (int i = 0; i < storage.GetSlotsCount(); i++)
+   {
+    InventoryStorageSlot slot = storage.GetSlot(i);
+    if (!slot || slot.GetAttachedEntity()) continue;
+    if (inv.TryInsertItemInStorage(launcher, storage, i)) return true;
+   }
+  }
+  RestoreItem(corpseInv, source, launcher, corpse.GetOrigin());
+  return false;
+ }
+
+ static void TransferBack(SCR_InventoryStorageManagerComponent soldierInv, IEntity corpse, IEntity item)
+ {
+  InventoryStorageManagerComponent corpseInv = InventoryStorageManagerComponent.Cast(corpse.FindComponent(InventoryStorageManagerComponent));
+  if (!corpseInv) return;
+  if (corpseInv.TryInsertItem(item)) return;
+  if (soldierInv.TryRemoveItemFromInventory(item)) RestoreItem(corpseInv, null, item, corpse.GetOrigin());
  }
 
  static bool LootFromCorpse(ChimeraCharacter soldier, IEntity corpse, bool needsAmmo, BaseMuzzleComponent muzzle, bool needsAT, SCR_AIGroup group)
  {
-  if (!soldier || !corpse) return false;
+  if (!CanLoot(soldier, corpse) || BBB.HasPlayer(group)) return false;
+  AIControlComponent control = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
+  AIAgent agent = null;
+  if (control) agent = control.GetAIAgent();
+  SCR_AIUtilityComponent utility = null;
+  if (agent) utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+  CharacterControllerComponent controller = soldier.GetCharacterController();
+  if (!controller || controller.IsPlayerControlled() || BBB.PlayerOf(soldier) || BBB_OrderIntent.Blocks(utility)) return false;
   SCR_InventoryStorageManagerComponent soldierInv = SCR_InventoryStorageManagerComponent.Cast(soldier.FindComponent(SCR_InventoryStorageManagerComponent));
   if (!soldierInv) return false;
   int magsMoved = 0;
@@ -205,14 +323,36 @@ class BBB_Rearm
    array<IEntity> rockets = {};
    if (CorpseHasAT(corpse, launcher, rockets))
    {
-    if (soldierInv.EquipWeapon(launcher, null, true))
+    if (EquipLauncher(soldierInv, launcher, corpse))
     {
-     atMoved++;
-     s_iLaunchersLooted++;
      foreach (IEntity rocket : rockets)
      {
       if (TransferItem(soldierInv, rocket, corpse))
        s_iMagazinesLooted++;
+     }
+     BaseWeaponComponent acquired = BaseWeaponComponent.Cast(launcher.FindComponent(BaseWeaponComponent));
+     bool operational = LauncherLoaded(acquired);
+     array<BaseMuzzleComponent> acquiredMuzzles = {};
+     if (acquired) acquired.GetMuzzlesList(acquiredMuzzles);
+     foreach (BaseMuzzleComponent acquiredMuzzle : acquiredMuzzles)
+     {
+      SCR_MuzzleInMagComponent projectileMuzzle = SCR_MuzzleInMagComponent.Cast(acquiredMuzzle);
+      if (projectileMuzzle && !projectileMuzzle.CanBeReloaded()) continue;
+      array<IEntity> compatible = {};
+      if (CorpseHasMatchingMag(soldier, acquiredMuzzle, compatible)) operational = true;
+     }
+     BaseWeaponManagerComponent wm = BaseWeaponManagerComponent.Cast(soldier.FindComponent(BaseWeaponManagerComponent));
+     array<IEntity> equipped = {};
+     if (wm) wm.GetWeaponsList(equipped);
+     if (operational && equipped.Contains(launcher))
+     {
+      atMoved++;
+      s_iLaunchersLooted++;
+     }
+     else
+     {
+      // Do not leave an unusable tube occupying the recipient's weapon slot.
+      TransferBack(soldierInv, corpse, launcher);
      }
     }
    }
@@ -235,6 +375,42 @@ class BBB_Rearm
   return true;
  }
 
+ static void PruneFailures(float nowMs)
+ {
+  for (int i = s_aFailures.Count() - 1; i >= 0; i--)
+  {
+   BBB_RearmFailure entry = s_aFailures[i];
+   if (!entry.m_Soldier || !entry.m_Corpse || nowMs >= entry.m_Until) s_aFailures.Remove(i);
+  }
+ }
+
+ static bool BodyBlocked(ChimeraCharacter soldier, IEntity corpse)
+ {
+  foreach (BBB_RearmFailure entry : s_aFailures)
+   if (entry.m_Soldier == soldier && entry.m_Corpse == corpse && entry.m_Attempts >= MAX_BODY_ATTEMPTS) return true;
+  return false;
+ }
+
+ static void RecordFailure(ChimeraCharacter soldier, IEntity corpse, float nowMs)
+ {
+  if (!soldier || !corpse) return;
+  PruneFailures(nowMs);
+  foreach (BBB_RearmFailure entry : s_aFailures)
+  {
+   if (entry.m_Soldier != soldier || entry.m_Corpse != corpse) continue;
+   entry.m_Attempts++;
+   entry.m_Until = nowMs + FAILURE_BACKOFF_MS;
+   return;
+  }
+  if (s_aFailures.Count() >= MAX_FAILURE_RECORDS) s_aFailures.Remove(0);
+  BBB_RearmFailure failure = new BBB_RearmFailure();
+  failure.m_Soldier = soldier;
+  failure.m_Corpse = corpse;
+  failure.m_Attempts = 1;
+  failure.m_Until = nowMs + FAILURE_BACKOFF_MS;
+  s_aFailures.Insert(failure);
+ }
+
  static IEntity FindLootSource(ChimeraCharacter soldier, bool needsAmmo, BaseMuzzleComponent muzzle, bool needsAT)
  {
   if (!soldier) return null;
@@ -245,7 +421,7 @@ class BBB_Rearm
   vector soldierPos = soldier.GetOrigin();
   foreach (IEntity ent : s_aQueryCorpseHits)
   {
-   if (!ent || ent == soldier) continue;
+   if (!ent || ent == soldier || BodyBlocked(soldier, ent)) continue;
    ChimeraCharacter ch = ChimeraCharacter.Cast(ent);
    if (ch)
    {
@@ -292,6 +468,7 @@ class BBB_Rearm
    s_mRearmAction.Remove(soldier);
   }
   s_mTargetCorpse.Remove(soldier);
+  s_mTripStarted.Remove(soldier);
  }
 
  static bool InRearmAction(ChimeraCharacter soldier)
@@ -305,20 +482,76 @@ class BBB_Rearm
   if (!soldier) return;
   s_mRearmAction.Set(soldier, act);
   s_mTargetCorpse.Set(soldier, corpse);
+  s_mTripStarted.Set(soldier, GetGame().GetWorld().GetWorldTime());
+ }
+
+ static bool ExpireTrip(ChimeraCharacter soldier, float nowMs)
+ {
+  SCR_AIMoveIndividuallyBehavior curAction = s_mRearmAction.Get(soldier);
+  IEntity previous = s_mTargetCorpse.Get(soldier);
+  bool actionActive = curAction && !curAction.GetRemoveAction() && curAction.GetActionState() != EAIActionState.FAILED && curAction.GetActionState() != EAIActionState.COMPLETED;
+  bool timedOut = s_mTripStarted.Contains(soldier) && nowMs - s_mTripStarted.Get(soldier) >= TRIP_TIMEOUT_MS;
+  if (previous && (!actionActive || timedOut) && !CanLoot(soldier, previous))
+  {
+   RecordFailure(soldier, previous, nowMs);
+   CancelRearmAction(soldier);
+   return true;
+  }
+  return false;
+ }
+
+ // A host can remove a squad from its autonomous roster on possession/order
+ // changes. Release existing trips even when CheckRearmFor will no longer run.
+ static void WatchTrips(notnull array<SCR_AIGroup> groups)
+ {
+  Read();
+  for (int i = s_mRearmAction.Count() - 1; i >= 0; i--)
+  {
+   ChimeraCharacter soldier = s_mRearmAction.GetKey(i);
+   if (!soldier)
+   {
+    SCR_AIMoveIndividuallyBehavior action = s_mRearmAction.GetElement(i);
+    if (action) action.Fail();
+    s_mRearmAction.RemoveElement(i);
+    continue;
+   }
+   AIControlComponent control = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
+   AIAgent agent = null;
+   if (control) agent = control.GetAIAgent();
+   SCR_AIGroup group = null;
+   SCR_AIUtilityComponent utility = null;
+   if (agent)
+   {
+    group = SCR_AIGroup.Cast(agent.GetParentGroup());
+    utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+   }
+   CharacterControllerComponent controller = soldier.GetCharacterController();
+   if (!controller || controller.IsPlayerControlled() || !s_bOn || !BBB.IsAlive(soldier) || BBB.PlayerOf(soldier) || !group || !groups.Contains(group) || BBB.HasPlayer(group) || BBB_OrderIntent.Blocks(utility)) CancelRearmAction(soldier);
+  }
+  float nowMs = GetGame().GetWorld().GetWorldTime();
+  PruneFailures(nowMs);
+  for (int j = s_mNextRearmCheck.Count() - 1; j >= 0; j--)
+   if (!s_mNextRearmCheck.GetKey(j) || nowMs >= s_mNextRearmCheck.GetElement(j)) s_mNextRearmCheck.RemoveElement(j);
+  for (int k = s_mTripStarted.Count() - 1; k >= 0; k--)
+   if (!s_mTripStarted.GetKey(k)) s_mTripStarted.RemoveElement(k);
+  for (int n = s_mTargetCorpse.Count() - 1; n >= 0; n--)
+   if (!s_mTargetCorpse.GetKey(n)) s_mTargetCorpse.RemoveElement(n);
  }
 
  static void CheckRearmFor(SCR_AIGroup group)
  {
   Read();
-  if (!s_bOn || !group || BBB.HasPlayer(group)) return;
+  if (!group) return;
+  bool groupBlocked = !s_bOn || BBB.HasPlayer(group);
   float nowMs = GetGame().GetWorld().GetWorldTime();
+  PruneFailures(nowMs);
   array<AIAgent> agents = {};
   BBB.s_Hooks.GetMembers(group, agents);
   foreach (AIAgent agent : agents)
   {
    if (!agent) continue;
    ChimeraCharacter soldier = ChimeraCharacter.Cast(agent.GetControlledEntity());
-   if (!soldier || !BBB.IsAlive(soldier) || soldier.IsInVehicle() || BBB.PlayerOf(soldier))
+   if (groupBlocked || !soldier || !BBB.IsAlive(soldier) || soldier.IsInVehicle() || BBB.PlayerOf(soldier))
    {
     if (soldier) CancelRearmAction(soldier);
     continue;
@@ -335,14 +568,18 @@ class BBB_Rearm
     continue;
    }
    CharacterControllerComponent ctl = soldier.GetCharacterController();
-   if (!ctl || ctl.IsUnconscious())
+   if (!ctl || ctl.IsUnconscious() || ctl.IsPlayerControlled())
+   {
+    CancelRearmAction(soldier);
+    continue;
+   }
+   SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+   if (BBB_OrderIntent.Blocks(utility))
    {
     CancelRearmAction(soldier);
     continue;
    }
    if (s_mNextRearmCheck.Contains(soldier) && nowMs < s_mNextRearmCheck.Get(soldier)) continue;
-
-   SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
    if (utility && utility.m_ThreatSystem)
    {
     float sup, sh, inVal, en;
@@ -365,6 +602,9 @@ class BBB_Rearm
     continue;
    }
 
+   ExpireTrip(soldier, nowMs);
+   SCR_AIMoveIndividuallyBehavior curAction = s_mRearmAction.Get(soldier);
+   bool actionActive = curAction && !curAction.GetRemoveAction() && curAction.GetActionState() != EAIActionState.FAILED && curAction.GetActionState() != EAIActionState.COMPLETED;
    IEntity corpse = FindLootSource(soldier, needsAmmo, muzzle, needsAT);
    if (!corpse)
    {
@@ -373,24 +613,13 @@ class BBB_Rearm
     continue;
    }
 
-   SCR_AIMoveIndividuallyBehavior curAction = null;
-   if (s_mRearmAction.Contains(soldier)) curAction = s_mRearmAction.Get(soldier);
-   bool actionActive = curAction && !curAction.GetRemoveAction() && curAction.GetActionState() != EAIActionState.FAILED && curAction.GetActionState() != EAIActionState.COMPLETED;
-   if (!actionActive && curAction)
-   {
-    s_mRearmAction.Remove(soldier);
-    s_mTargetCorpse.Remove(soldier);
-    curAction = null;
-   }
-
-   float dist = vector.DistanceXZ(soldier.GetOrigin(), corpse.GetOrigin());
-   if (dist <= LOOT_REACH_M)
+   float dist = vector.Distance(soldier.GetOrigin(), corpse.GetOrigin());
+   if (CanLoot(soldier, corpse))
    {
     if (curAction && curAction.GetActionState() != EAIActionState.COMPLETED && curAction.GetActionState() != EAIActionState.FAILED)
      curAction.Complete();
-    s_mRearmAction.Remove(soldier);
-    s_mTargetCorpse.Remove(soldier);
-    LootFromCorpse(soldier, corpse, needsAmmo, muzzle, needsAT, group);
+    CancelRearmAction(soldier);
+    if (!LootFromCorpse(soldier, corpse, needsAmmo, muzzle, needsAT, group)) RecordFailure(soldier, corpse, nowMs);
     s_mNextRearmCheck.Set(soldier, nowMs + REARM_COOLDOWN_MS);
    }
    else if (utility && dist <= s_fSearchRadius)
@@ -399,6 +628,7 @@ class BBB_Rearm
     {
      if (curAction && actionActive) curAction.Fail();
      s_mTargetCorpse.Set(soldier, corpse);
+     s_mTripStarted.Set(soldier, nowMs);
      SCR_AIMoveIndividuallyBehavior moveAction = new SCR_AIMoveIndividuallyBehavior(utility, null, corpse.GetOrigin(), priority: SCR_AIActionBase.PRIORITY_BEHAVIOR_MOVE_INDIVIDUALLY + 5, ent: corpse, radius: 2.0);
      s_mRearmAction.Set(soldier, moveAction);
      utility.AddAction(moveAction);
@@ -415,6 +645,8 @@ class BBB_Rearm
     act.Complete();
   }
   s_mRearmAction.Clear();
+  s_mTripStarted.Clear();
+  s_aFailures.Clear();
   s_mNextRearmCheck.Clear();
   s_mTargetCorpse.Clear();
   s_aQueryCorpseHits.Clear();

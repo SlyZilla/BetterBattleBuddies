@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','look','firemaneuverperf','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','look','firemaneuverperf','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath
 )
@@ -37,8 +37,8 @@ $id = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $Preset
 $profile = Join-Path $root ('.local-testserver/' + $id)
 $resultDir = Join-Path $root '.bbb-results'
 New-Item -ItemType Directory -Path $profile,$resultDir -Force | Out-Null
-$flags = @{ vanilla = '-bbbVanillaTest 1'; look = '-acrBbbLookTest 1'; firemaneuverperf = '-acrBbbFireManeuverPerfTest 1'; compile = '' }
-$timeouts = @{ vanilla = 65; look = 90; firemaneuverperf = 160; compile = 45 }
+$flags = @{ vanilla = '-bbbVanillaTest 1'; rearm = '-bbbRearmTest 1'; look = '-acrBbbLookTest 1'; firemaneuverperf = '-acrBbbFireManeuverPerfTest 1'; compile = '' }
+$timeouts = @{ vanilla = 65; rearm = 65; look = 90; firemaneuverperf = 160; compile = 45 }
 $world = '{AC230926A00100E0}Worlds/BBB_TestArland.ent'
 if ($Preset -eq 'compile') { $world = '{77C41EA429B6AC35}worlds/GameMaster/GM_Arland.ent' }
 $argsLine = '-server "' + $world + '" -addonsDir "' + (Split-Path $AddonRoot -Parent) + '" -addons BBB0261015000001 -profile "' + $profile + '" -maxFPS 60 -noBackend ' + $flags[$Preset]

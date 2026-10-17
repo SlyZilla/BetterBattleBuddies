@@ -93,6 +93,7 @@ class BBB
 		t = BBB_Perf.Lap("tick.combat", t);
 		array<SCR_AIGroup> rearmGroups = {};
 		s_Hooks.GetGroups(rearmGroups);
+		BBB_Rearm.WatchTrips(rearmGroups);
 		foreach (SCR_AIGroup rg : rearmGroups)
 			BBB_Rearm.CheckRearmFor(rg);
 		t = BBB_Perf.Lap("tick.rearm", t);
