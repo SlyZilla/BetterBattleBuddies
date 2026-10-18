@@ -4,7 +4,7 @@ Keep your head on a swivel. Keep the gun in the fight. And when the blast comes,
 
 Better Battle Buddies brings general AI improvements to Arma Reforger: sharper scanning, weapon-readiness fixes, heavier suppression reactions, medical smoke and vehicle helpers. Run it in vanilla scenarios on its own, or alongside AC: Actual. No commander game mode is included, and AC: Actual is not required.
 
-WHAT YOUR BUDDIES DO (0.1.2)
+WHAT YOUR BUDDIES DO
 
 - Watch the horizon and recover weapon readiness when trouble starts.
 - Lower weapons during quiet ordinary travel and recover readiness when danger returns; combat and explicit tactical orders take priority.
@@ -12,7 +12,7 @@ WHAT YOUR BUDDIES DO (0.1.2)
 - Passengers bail out of a slowing vehicle under fire while turret crews stay aboard.
 - Reverse and steer out of vehicle snags, handle doors and gates, and discard spent launchers. Personal bios give the soldiers a little character too.
 
-COMING IN 0.1.4
+COMBAT REACTIONS AND SURVIVAL
 
 - Prevent mode cycling with reliable fire-selector fallback handling.
 - Feel the pressure of elevated and flanking fire. Ambushes shock calm squads, and sustained suppression keeps heads down longer.
@@ -31,13 +31,11 @@ GET STARTED
 
 Download and enable BBB, then start a scenario with AI, such as Conflict or Game Master. Multiplayer requires the addon on the server and joining clients. No other mod is required. ACE is optional; ACE-dependent features need ACE loaded.
 
-Current public release: 0.1.2. The next prepared update is 0.1.4; the features above are included in its release notes and remain unreleased until upload.
-
 OPTIONS AND LIMITS
 
-Medic smoke is on by default. The separate safer-healing option and experimental combat features remain opt-in. Server startup options include -bbbMedicSmoke 0 to disable smoke and -bbbMedic 1 to enable safer healing. For 0.1.4, individual opt-outs include -bbbThreatGeometry 0, -bbbThreatDecay 0, -bbbThreatExplosion 0, -bbbGunnerReplace 0, -bbbArmourScatter 0 and -bbbRearm 0. Use -bbbRearmRadius <metres> to change the 25 m scavenging radius (5–100 m).
+Medic smoke is on by default. The separate safer-healing option and experimental combat features remain opt-in. Server startup options include -bbbMedicSmoke 0 to disable smoke and -bbbMedic 1 to enable safer healing. Individual opt-outs include -bbbThreatGeometry 0, -bbbThreatDecay 0, -bbbThreatExplosion 0, -bbbGunnerReplace 0, -bbbArmourScatter 0 and -bbbRearm 0. Use -bbbRearmRadius <metres> to change the 25 m scavenging radius (5–100 m).
 
-BBB works through Reforger's AI: terrain, pathfinding, equipment and current orders still matter. Standalone checks and earlier ACA integration checks have passed; installed gameplay, ACE combinations and multiplayer acceptance remain ongoing. AC: Actual supplies its own commander, logistics and vehicle-driving decisions through BBB's host hooks.
+BBB works through Reforger's AI: terrain, pathfinding, equipment and current orders still matter. AC: Actual supplies its own commander, logistics and vehicle-driving decisions through BBB's host hooks.
 
 FEEDBACK AND CREDITS
 
