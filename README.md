@@ -72,9 +72,5 @@ server and affected client logs when available. Screenshots or video also help,
 especially on consoles. Remove passwords, tokens, IP addresses and personal
 information before uploading logs. Missing logs do not prevent reporting a bug.
 
-## Contributing
-
-See [documentation](documentation) for contributor guidance.
-
 Extracted from AC: Actual on 15 October 2026. Licensed under APL-SA; see
 [LICENSE.md](LICENSE.md) for the retained original attribution and project credits.
