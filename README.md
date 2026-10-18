@@ -58,13 +58,22 @@ need broader live acceptance. Publication is separate from that acceptance.
 
 ## Reporting problems
 
-Include the BBB and game versions, scenario, other mods, whether you hosted or
-joined, and what happened versus what you expected. Attach `console.log` and
-`script.log` from the affected session. Normal game logs are under
-`Documents\My Games\ArmaReforger\logs`; custom profiles and dedicated servers may
-use another location. For multiplayer, include server and affected client logs
-when available. Report bugs and request features at
-[GitHub Issues](https://github.com/propst-design/BetterBattleBuddies/issues).
+**[Report a bug](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=01-bug-report.yml)**
+or **[suggest a feature](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=02-feature-request.yml)**.
+Search [existing issues](https://github.com/propst-design/BetterBattleBuddies/issues?q=is%3Aissue)
+first; add details to an existing report when it describes the same problem.
+
+The bug report form asks for BBB/game versions, platform, scenario, other mods,
+hosting/joining context, steps to reproduce, expected behavior and actual behavior.
+Report one problem per issue. Testing with only BBB and the base game helps isolate
+conflicts, but is optional.
+
+Attach `console.log` and `script.log` from the affected session when available.
+Normal PC game logs are under `Documents\My Games\ArmaReforger\logs`; custom
+profiles and dedicated servers may use another location. For multiplayer, include
+server and affected client logs when available. Screenshots or video also help,
+especially on consoles. Remove passwords, tokens, IP addresses and personal
+information before uploading logs. Missing logs do not prevent reporting a bug.
 
 ## Working on BBB
 
