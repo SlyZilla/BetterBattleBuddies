@@ -2,7 +2,7 @@
 
 ## 0.1.4 — unreleased
 
-- Expanded the Workshop overview with standalone scenario use, squad-command compatibility and server options.
+- Expanded the Workshop overview with standalone scenario use, squad-command compatibility, server options and public GitHub source/issue links.
 - Prevent repeated AI fire-selector requests when the weapon already uses the best available fallback mode.
 - Added tactical suppression geometry and recovery tuning (`BBB_Threat`, `-bbbThreatGeometry 0`, `-bbbThreatDecay 0`): incoming fire from elevated high ground or exposed flanks/rear pins AI faster, ambushes against calm or marching squads deal initial suppression shock, nearby explosions carry heavier suppression weight, and suppression decays more gradually so base-of-fire tactics keep heads down longer.
 - Added 343 m/s acoustic speed-of-sound explosion reflex (`BBB_Threat`, `-bbbThreatExplosion 0`): foot soldiers near a detonation hit the dirt (prone within 45 m, crouch out to 75 m) as the blast wave physically reaches them rather than reacting on the same frame or remaining standing.

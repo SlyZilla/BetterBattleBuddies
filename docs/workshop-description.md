@@ -37,7 +37,11 @@ Medic smoke is on by default. The separate safer-healing option and experimental
 
 BBB works through Reforger's AI: terrain, pathfinding, equipment and current orders still matter. AC: Actual supplies its own commander, logistics and vehicle-driving decisions through BBB's host hooks.
 
-FEEDBACK AND CREDITS
+SOURCE, GUIDE AND FEEDBACK
+
+Public GitHub: https://github.com/propst-design/BetterBattleBuddies
+Read the README for setup and compatibility, browse the source, or report bugs and request features:
+https://github.com/propst-design/BetterBattleBuddies/issues
 
 When reporting a problem, include versions, scenario, other mods, host/client role, steps and expected behavior. Attach the affected console.log and script.log; normal game logs are under Documents\My Games\ArmaReforger\logs, with custom profiles/server setups using their configured location. Multiplayer reports benefit from both server and affected client logs.
 

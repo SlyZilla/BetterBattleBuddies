@@ -64,7 +64,8 @@ joined, and what happened versus what you expected. Attach `console.log` and
 `script.log` from the affected session. Normal game logs are under
 `Documents\My Games\ArmaReforger\logs`; custom profiles and dedicated servers may
 use another location. For multiplayer, include server and affected client logs
-when available. Report through the Workshop item's feedback/discussion facilities.
+when available. Report bugs and request features at
+[GitHub Issues](https://github.com/propst-design/BetterBattleBuddies/issues).
 
 ## Working on BBB
 
