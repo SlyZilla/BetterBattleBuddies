@@ -18,7 +18,7 @@ AC: Actual and does not add a commander game mode.
 2. Start a vanilla scenario such as Conflict or Game Master with AI present.
 3. For multiplayer, load BBB on the server and joining clients.
 
-The current public release is **0.1.4**, confirmed by successful Workshop upload and processing.
+The current Workshop release is **0.1.4**.
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## What your buddies do
@@ -48,13 +48,10 @@ Medic smoke is enabled by default. The separate safer-healing behavior is off by
 default; server startup options include `-bbbMedicSmoke 0` to disable smoke and
 `-bbbMedic 1` to enable safer healing. ACE is optional; ACE drag and other
 ACE-dependent behavior require ACE to be loaded. Experimental combat options
-remain opt-in; see [documentation](documentation) for configuration and measured limits.
+remain opt-in.
 
 AC: Actual integrates through BBB's host hooks and manages its own commander,
 bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
-Standalone checks and earlier ACA integration checks have passed, but installed
-Conflict/GM sessions, lifecycle behavior, ACE combinations and multiplayer still
-need broader live acceptance. Publication is separate from that acceptance.
 
 ## Reporting problems
 
@@ -75,16 +72,9 @@ server and affected client logs when available. Screenshots or video also help,
 especially on consoles. Remove passwords, tokens, IP addresses and personal
 information before uploading logs. Missing logs do not prevent reporting a bug.
 
-## Working on BBB
+## Contributing
 
-BBB's addon ID is `BBB0261015000001`; its only declared base dependency is Arma
-Reforger. For the shared development setup, keep this checkout beside
-`ArmaCommanderReforger` under Workbench's `addons` directory and open `addon.gproj`.
-BBB can also be loaded alone with a vanilla scenario.
-
-Read [documentation](documentation) and [documentation](documentation) before contributing. The
-documentation covers architecture, startup options, tests and the shared release
-console. Legacy `tools/make_release.py` is not the normal release workflow.
+See [documentation](documentation) for contributor guidance.
 
 Extracted from AC: Actual on 15 October 2026. Licensed under APL-SA; see
 [LICENSE.md](LICENSE.md) for the retained original attribution and project credits.
