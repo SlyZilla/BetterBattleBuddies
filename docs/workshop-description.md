@@ -7,6 +7,7 @@ Better Battle Buddies brings general AI improvements to Arma Reforger: sharper s
 WHAT YOUR BUDDIES DO (0.1.2)
 
 - Watch the horizon and recover weapon readiness when trouble starts.
+- Lower weapons during quiet ordinary travel and recover readiness when danger returns; combat and explicit tactical orders take priority.
 - Throw smoke toward a threat before advancing to an exposed casualty, waiting briefly for the cloud to bloom.
 - Passengers bail out of a slowing vehicle under fire while turret crews stay aboard.
 - Reverse and steer out of vehicle snags, handle doors and gates, and discard spent launchers. Personal bios give the soldiers a little character too.
@@ -18,17 +19,23 @@ COMING IN 0.1.4
 - Hit the dirt as a nearby blast reaches them, with a 343 m/s acoustic reaction delay: prone close in, crouched farther out.
 - Keep a turret manned when a gunner goes down, autonomously promoting available AI squadmates into the gun.
 - Get low against armor: non-AT infantry adopt low stances to minimize profile when facing armored vehicles, while rocket specialists hold position to engage.
-- Scavenge matching ammunition, rocket launchers, and munitions from nearby fallen casualties when running critically low in combat, with automatic route retries.
+- Scavenge compatible ammunition, rocket launchers and rockets from nearby casualties when critically low in combat. Searches check reach and obstructions, retry interrupted trips and yield to explicit player/GM orders.
+
+WHERE IT FITS
+
+Use BBB for the AI already in your scenario: infantry patrols, firefights, casualty aid and ground-vehicle crews. It does not recruit a squad or issue your battle plan. AC: Actual adds map-level command and logistics; the optional AiO Command Menu gives orders to your own linked squad. BBB can run without either.
+
+Mission makers can add BBB as a dependency to bring these behaviors to their scenarios. There is no ACA manager or commander setup to place for standalone use; BBB starts its vanilla integration automatically.
 
 GET STARTED
 
 Download and enable BBB, then start a scenario with AI, such as Conflict or Game Master. Multiplayer requires the addon on the server and joining clients. No other mod is required. ACE is optional; ACE-dependent features need ACE loaded.
 
-Current public release: 0.1.2 (verified against the Workshop history). Work toward 0.1.4 is underway (see upcoming features above).
+Current public release: 0.1.2. The next prepared update is 0.1.4; the features above are included in its release notes and remain unreleased until upload.
 
 OPTIONS AND LIMITS
 
-Medic smoke is on by default. The separate safer-healing option and experimental combat features remain opt-in. Server options include -bbbMedicSmoke 0 to disable smoke and -bbbMedic 1 to enable safer healing.
+Medic smoke is on by default. The separate safer-healing option and experimental combat features remain opt-in. Server startup options include -bbbMedicSmoke 0 to disable smoke and -bbbMedic 1 to enable safer healing. For 0.1.4, individual opt-outs include -bbbThreatGeometry 0, -bbbThreatDecay 0, -bbbThreatExplosion 0, -bbbGunnerReplace 0, -bbbArmourScatter 0 and -bbbRearm 0. Use -bbbRearmRadius <metres> to change the 25 m scavenging radius (5–100 m).
 
 BBB works through Reforger's AI: terrain, pathfinding, equipment and current orders still matter. Standalone checks and earlier ACA integration checks have passed; installed gameplay, ACE combinations and multiplayer acceptance remain ongoing. AC: Actual supplies its own commander, logistics and vehicle-driving decisions through BBB's host hooks.
 
