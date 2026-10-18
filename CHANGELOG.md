@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.4 — unreleased
+## 0.1.5 — unreleased
+
+## 0.1.4 — released
 
 - Expanded the Workshop overview with standalone scenario use, squad-command compatibility, server options and public GitHub source/issue links.
 - Prevent repeated AI fire-selector requests when the weapon already uses the best available fallback mode.
