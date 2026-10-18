@@ -1,7 +1,7 @@
 # Better Battle Buddies
 
 [![Game: Arma Reforger](https://img.shields.io/badge/Arma-Reforger-556b2f?style=flat-square)](https://reforger.armaplatform.com/)
-[![Workshop release: 0.1.3](https://img.shields.io/badge/Workshop-0.1.3-blue?style=flat-square)](CHANGELOG.md)
+[![Workshop release: 0.1.2](https://img.shields.io/badge/Workshop-0.1.2-blue?style=flat-square)](CHANGELOG.md)
 [![Standalone addon](https://img.shields.io/badge/Addon-Standalone-teal?style=flat-square)](#install-and-play)
 [![License: APL-SA](https://img.shields.io/badge/License-APL--SA-orange?style=flat-square)](LICENSE.md)
 
@@ -18,14 +18,13 @@ AC: Actual and does not add a commander game mode.
 2. Start a vanilla scenario such as Conflict or Game Master with AI present.
 3. For multiplayer, load BBB on the server and joining clients.
 
-The current public release is **0.1.3**, confirmed 16 October 2026.
+The current public release is **0.1.2**, verified against the Workshop history.
 Work toward **0.1.4** is in progress (see upcoming features below).
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
-## What changes (0.1.3)
+## What changes (0.1.2)
 
 - **More alert soldiers.** Horizon scanning, weapon-readiness recovery and engagement fixes help AI notice trouble and bring their weapons back into the fight.
-- **Weapon mode reliability.** Fire-selector fixes accept already-selected fallback modes and prevent mode cycling.
 - **Smoke before aid.** Medics and teammates deploy smoke toward a threat before advancing to an exposed casualty, waiting for the cloud to bloom.
 - **Tactical dismount under fire.** AI passengers in vehicles slowing under fire dismount to fight on foot while turret crews remain aboard.
 - **Less getting stuck.** Standalone AI drivers reverse and steer away from obstacles. Door/gate helpers and spent-launcher handling address everyday snags.
@@ -33,6 +32,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## Upcoming in 0.1.4
 
+- **Weapon mode reliability.** Fire-selector fixes accept already-selected fallback modes and prevent mode cycling.
 - **Fire that keeps heads down.** Elevated, flanking and rear fire affect suppression; ambushes shock calm squads, and suppression takes longer to wear off.
 - **Explosions with a beat of distance.** Foot soldiers hit the dirt as the blast wave reaches them using a 343 m/s acoustic delay: prone close in, crouched farther out.
 - **Keep the vehicle fighting.** Available AI squadmates autonomously replace empty or incapacitated turret gunners on operational armed vehicles.

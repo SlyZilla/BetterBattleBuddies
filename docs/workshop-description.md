@@ -4,16 +4,16 @@ Keep your head on a swivel. Keep the gun in the fight. And when the blast comes,
 
 Better Battle Buddies brings general AI improvements to Arma Reforger: sharper scanning, weapon-readiness fixes, heavier suppression reactions, medical smoke and vehicle helpers. Run it in vanilla scenarios on its own, or alongside AC: Actual. No commander game mode is included, and AC: Actual is not required.
 
-WHAT YOUR BUDDIES DO (0.1.3)
+WHAT YOUR BUDDIES DO (0.1.2)
 
 - Watch the horizon and recover weapon readiness when trouble starts.
-- Prevent mode cycling with reliable fire-selector fallback handling.
 - Throw smoke toward a threat before advancing to an exposed casualty, waiting briefly for the cloud to bloom.
 - Passengers bail out of a slowing vehicle under fire while turret crews stay aboard.
 - Reverse and steer out of vehicle snags, handle doors and gates, and discard spent launchers. Personal bios give the soldiers a little character too.
 
 COMING IN 0.1.4
 
+- Prevent mode cycling with reliable fire-selector fallback handling.
 - Feel the pressure of elevated and flanking fire. Ambushes shock calm squads, and sustained suppression keeps heads down longer.
 - Hit the dirt as a nearby blast reaches them, with a 343 m/s acoustic reaction delay: prone close in, crouched farther out.
 - Keep a turret manned when a gunner goes down, autonomously promoting available AI squadmates into the gun.
@@ -24,7 +24,7 @@ GET STARTED
 
 Download and enable BBB, then start a scenario with AI, such as Conflict or Game Master. Multiplayer requires the addon on the server and joining clients. No other mod is required. ACE is optional; ACE-dependent features need ACE loaded.
 
-Current public release: 0.1.3 (confirmed 16 October 2026). Work toward 0.1.4 is underway (see upcoming features above).
+Current public release: 0.1.2 (verified against the Workshop history). Work toward 0.1.4 is underway (see upcoming features above).
 
 OPTIONS AND LIMITS
 
