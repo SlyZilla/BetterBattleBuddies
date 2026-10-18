@@ -1,0 +1,143 @@
+name: Bug report
+description: Report an AI, compatibility, crash or performance problem in Better Battle Buddies.
+title: '[Bug]: '
+labels:
+- bug
+body:
+- type: markdown
+  attributes:
+    value: Search existing issues first and report one problem per issue. A small reproducible scenario
+      helps us investigate. You can report a problem even if you cannot test without other mods or collect
+      logs.
+- type: checkboxes
+  id: duplicates
+  attributes:
+    label: Before reporting
+    options:
+    - label: I searched existing open and closed issues for this problem.
+      required: true
+- type: textarea
+  id: summary
+  attributes:
+    label: What happened?
+    description: Describe the observed behavior and which AI units, weapons or vehicles were involved.
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: What did you expect?
+  validations:
+    required: true
+- type: input
+  id: bbb-version
+  attributes:
+    label: BBB version
+    placeholder: e.g. 0.1.3 (Workshop)
+    description: Copy the installed Workshop version, or the commit if using source. Write unknown if
+      unavailable.
+  validations:
+    required: true
+- type: input
+  id: game-version
+  attributes:
+    label: Arma Reforger version
+    description: Include the build number and stable/experimental branch if known.
+  validations:
+    required: true
+- type: dropdown
+  id: platform
+  attributes:
+    label: Affected player platform
+    options:
+    - PC (Windows)
+    - Xbox Series X|S
+    - PlayStation 5
+    - Multiple platforms
+    - Other / unknown
+  validations:
+    required: true
+- type: dropdown
+  id: session
+  attributes:
+    label: Session type
+    options:
+    - Single player / local Game Master
+    - Hosted multiplayer (I am the host)
+    - Multiplayer (I joined a server)
+    - Dedicated server (I administer it)
+    - Workbench / source test
+    - Other / unknown
+  validations:
+    required: true
+- type: input
+  id: scenario
+  attributes:
+    label: Scenario and map
+    placeholder: e.g. Game Master on Arland
+    description: Include the scenario name and Workshop ID if it is modded.
+  validations:
+    required: true
+- type: textarea
+  id: mods
+  attributes:
+    label: Other mods and BBB settings
+    description: 'List other mods and versions, especially ACE, AC: Actual and AI mods. Include changed
+      -bbb startup options. Write none/default if applicable.'
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: Steps to reproduce
+    placeholder: '1. Load the scenario with these mods...
+
+      2. Spawn/order these units...
+
+      3. Observe...'
+    description: Describe setup, orders and actions in order. Include distance, terrain or vehicle type
+      where relevant. If intermittent, describe the last occurrence.
+  validations:
+    required: true
+- type: dropdown
+  id: frequency
+  attributes:
+    label: How often does it happen?
+    options:
+    - Every time
+    - Often
+    - Sometimes
+    - Once so far
+    - Unknown
+  validations:
+    required: true
+- type: dropdown
+  id: minimal-test
+  attributes:
+    label: Tested with BBB and the base game only?
+    options:
+    - Not tested / unable to test
+    - Yes - the problem still happens
+    - Yes - the problem disappears
+    - Not applicable
+  validations:
+    required: true
+- type: textarea
+  id: evidence
+  attributes:
+    label: Logs, screenshots or video
+    description: Attach console.log and script.log from the affected session if available. On PC, normal
+      logs are under Documents\My Games\ArmaReforger\logs; custom profiles/servers may differ. For multiplayer,
+      include server and affected client logs when available. Remove passwords, tokens, IP addresses and
+      personal information before attaching. Console players can use screenshots/video; logs are optional.
+  validations:
+    required: false
+- type: textarea
+  id: context
+  attributes:
+    label: Additional context
+    description: For performance problems, include approximate AI count, hardware, server/client FPS and
+      whether it worsens over time. For multiplayer, note whether the host/server and other players see
+      the same behavior.
+  validations:
+    required: false

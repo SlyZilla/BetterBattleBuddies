@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an AI improvement or a change to Better Battle Buddies.
+title: '[Feature]: '
+labels:
+- enhancement
+body:
+- type: markdown
+  attributes:
+    value: Search existing issues first. Describe one idea per request and the gameplay situation it would
+      improve.
+- type: textarea
+  id: problem
+  attributes:
+    label: What gameplay problem would this solve?
+    description: Give a concrete example of the current AI behavior or limitation.
+  validations:
+    required: true
+- type: textarea
+  id: proposal
+  attributes:
+    label: Proposed behavior
+    description: Describe what the AI should do and when. Include how it should respect player orders
+      or control where relevant.
+  validations:
+    required: true
+- type: textarea
+  id: alternatives
+  attributes:
+    label: Alternatives or workarounds
+    description: Describe anything you have tried or other approaches worth considering.
+  validations:
+    required: false
+- type: textarea
+  id: context
+  attributes:
+    label: Scenario, mods and examples
+    description: 'Include relevant game mode, mod combinations, screenshots or video links. Mention whether
+      the idea needs another mod such as ACE or AC: Actual.'
+  validations:
+    required: false
