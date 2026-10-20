@@ -2,6 +2,8 @@
 
 ## 0.1.5 — unreleased
 
+- Added optional squad morale, retrograde break-contact withdrawal and surrender (`-bbbMorale 1`): autonomous infantry squads suffering heavy casualties (>= 50%), squad leader loss or heavy suppression conduct covered peel-back bounds to disengage from active contacts; isolated, out-of-ammo soldiers cornered by close enemies (<= 15 m) surrender instead of charging blindly.
+
 ## 0.1.4 — released
 
 - Expanded the Workshop overview with standalone scenario use, squad-command compatibility, server options and public GitHub source/issue links.

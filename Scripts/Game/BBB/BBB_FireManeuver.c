@@ -109,7 +109,7 @@ class BBB_FireManeuver
 
  static bool GroupAllowed(SCR_AIGroup group)
  {
-  if (!group || !group.GetGroupUtilityComponent() || !BBB.s_Hooks.AllowFireManeuver(group)) return false;
+  if (!group || !group.GetGroupUtilityComponent() || !BBB.s_Hooks.AllowFireManeuver(group) || BBB_Morale.IsWithdrawing(group)) return false;
   SCR_AIGroupUtilityComponent groupUtility = group.GetGroupUtilityComponent();
   if (groupUtility.GetCombatModeExternal() != EAIGroupCombatMode.FIRE_AT_WILL) return false;
   SCR_AIWaypoint waypoint = SCR_AIWaypoint.Cast(group.GetCurrentWaypoint());
@@ -255,7 +255,7 @@ class BBB_FireManeuver
  protected static void Update(BBB_FireTeamJob job, float now)
  {
   AIWaypoint waypoint = job.m_Group.GetCurrentWaypoint();
-  if (waypoint != job.m_Waypoint || (waypoint && vector.DistanceXZ(waypoint.GetOrigin(), job.m_WaypointPos) > 1) || now - job.m_fStarted > 60) { End(job.m_Group, now); return; }
+  if (waypoint != job.m_Waypoint || (waypoint && vector.DistanceXZ(waypoint.GetOrigin(), job.m_WaypointPos) > 1) || now - job.m_fStarted > 60 || BBB_Morale.IsWithdrawing(job.m_Group)) { End(job.m_Group, now); return; }
   int coverReady, moveReady, nextCoverReady;
   bool arrivedCoverFire;
   bool coverMG;
