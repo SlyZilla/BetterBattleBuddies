@@ -35,6 +35,8 @@ class BBB_Hooks : Managed
  bool AllowSmoke(SCR_AIGroup group) { return true; }
  // Host tactical doctrines may veto static weapon crewing.
  bool AllowStaticWeapons(SCR_AIGroup group) { return true; }
+ // Host tactical doctrines may veto offensive hand grenade employment.
+ bool AllowGrenades(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Something dropped on the ground that the host may clean up later.
@@ -61,6 +63,7 @@ class BBB
 		BBB_Morale.Read();
 		BBB_Smoke.Read();
 		BBB_StaticWeapons.Read();
+		BBB_Grenades.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -85,6 +88,7 @@ class BBB
   BBB_Morale.Stop();
   BBB_Smoke.Stop();
   BBB_StaticWeapons.Stop();
+  BBB_Grenades.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -123,6 +127,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.smoke", t);
 		BBB_StaticWeapons.Tick();
 		t = BBB_Perf.Lap("tick.staticWeapons", t);
+		BBB_Grenades.Tick();
+		t = BBB_Perf.Lap("tick.grenades", t);
 		BBB_Perf.OnTick();
  }
 
