@@ -4,6 +4,8 @@
 // AI is parked, the vehicle reverses with the wheel turned for a few seconds and
 // brakes, then the driver gets his AI back. Inputs are written every frame
 // (BBB.Frame): the vehicle controller drops inputs set less often.
+// The driver's horn is released too: an AI driver honking at a soldier in its way
+// keeps the horn pressed forever if its AI is parked mid-honk.
 
 // Told when a manoeuvre is over (finished, driver lost or timed out).
 class BBB_UnstickListener : Managed
@@ -35,7 +37,18 @@ class BBB_Unstick : Managed
   unstick.m_Listener = listener;
   AIControlComponent ai = AIControlComponent.Cast(driver.FindComponent(AIControlComponent));
   if (ai && ai.IsAIActivated()) ai.DeactivateAI();
+  ReleaseHorn(driver);
   s_Active.Insert(unstick);
+ }
+
+ // Let go of the horn (an AI parked mid-honk never releases it itself).
+ static void ReleaseHorn(ChimeraCharacter character)
+ {
+  if (!character) return;
+  CharacterControllerComponent controller = character.GetCharacterController();
+  if (!controller) return;
+  CharacterInputContext input = controller.GetInputContext();
+  if (input && input.GetVehicleHorn() != 0) input.SetVehicleHorn(0);
  }
 
  // Drop a manoeuvre without finishing it (its owner is gone).
@@ -71,6 +84,7 @@ class BBB_Unstick : Managed
   if (physics && !physics.IsActive()) physics.SetActive(ActiveState.ACTIVE);
   if (!car.IsEngineOn()) car.ForceStartEngine();
   car.SetPersistentHandBrake(false);
+  ReleaseHorn(m_Driver);
   int neutral = sim.GearboxGearsCount() - sim.GearboxForwardGearsCount() - 1;
   sim.SetClutch(1);
   if (elapsed <= REVERSE_MS)
@@ -100,6 +114,7 @@ class BBB_Unstick : Managed
    int neutral = sim.GearboxGearsCount() - sim.GearboxForwardGearsCount() - 1;
    sim.SetGear(neutral + 1);
   }
+  ReleaseHorn(m_Driver);
   if (m_Driver && BBB.IsAlive(m_Driver) && !BBB.PlayerOf(m_Driver))
   {
    AIControlComponent ai = AIControlComponent.Cast(m_Driver.FindComponent(AIControlComponent));
