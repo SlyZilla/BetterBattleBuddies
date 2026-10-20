@@ -2,6 +2,11 @@
 
 ## 0.1.5 — unreleased
 
+- AI pinned down in the open now fight back instead of freezing: a suppressed soldier with no cover keeps spotting enemies, shoots without the extra hesitation and fires faster and looser. In cover they still keep their heads down (`-bbbExposedFire 0` restores the old behaviour).
+- Medics no longer walk past an enemy they can see on their way to a casualty: with a visible enemy within 50 m they fight first, then go. Soldiers dragging a casualty let go and shoot back when they see an enemy within 20 m.
+- Fixed riflemen ignoring jeeps and Humvees: once rifle hits had bounced off a UAZ or Humvee hull, AI stopped shooting at it for the rest of the game, even at its exposed machine gunner. Only real armour (APCs, IFVs, tanks) is now treated as immune to rifle fire.
+- Infantry no longer drop flat whenever an enemy vehicle with a turret is anywhere within 450 m. The get-low reaction now only answers real armour seen in the last 10 seconds and is off by default (`-bbbArmourScatter 1` turns it on).
+- Fixed AI holding a very fast-firing weapon mode who could aim but never fire.
 - Added optional armored-crew turnout (`-bbbCrewTurnout 1`): supported AI crew positions turn out after a quiet period, then button up when threats, incoming fire or vehicle hits return.
 - Added optional limited-turret driver alignment (`-bbbDriverAlign 1`): idle AI drivers can make a small adjustment on clear, level ground for their gunner's visible, viable target. Movement orders, player control and unsafe positions prevent the adjustment.
 - Added optional vehicle defence against launcher fire (`-bbbArmorReaction 1`): supported fitted smoke weapons fire and slow wheeled vehicles can make a short, guarded reverse maneuver. Player driving and movement orders take priority.

@@ -55,6 +55,7 @@ class BBB_Medic
  static const int HOLD_ENEMY = 3;
  static const int HOLD_HOT = 4;
  static const int HOLD_SMOKING = 5;
+ static const int HOLD_FIGHTING = 6; // his own visible enemy within FIGHT_FIRST_M
 
  static bool s_bSmokeOn = true;
  static const float SMOKE_BLOOM_MS = 4000;
@@ -170,6 +171,7 @@ class BBB_Medic
    case HOLD_ENEMY: return "casualty in view of the enemy";
    case HOLD_HOT: return "a healer was hit going there";
    case HOLD_SMOKING: return "waiting for smoke screen to bloom";
+   case HOLD_FIGHTING: return "fighting an enemy in view first";
   }
   return "go";
  }
@@ -183,6 +185,19 @@ class BBB_Medic
  }
 
  // Alive, conscious and not bleeding.
+ // A healer whose own pick is a visible enemy this close fights first (vanilla's heal, 111,
+ // outranks attacking a selected target, 90, so medics walked past enemies to casualties).
+ static const float FIGHT_FIRST_M = 50;
+ static bool FightFirst(SCR_AIUtilityComponent utility)
+ {
+  if (!utility || !utility.m_CombatComponent) return false;
+  SCR_AICombatComponent combat = utility.m_CombatComponent;
+  BaseTarget target = combat.GetCurrentTarget();
+  if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.IsDisarmed()) return false;
+  if (combat.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) return false;
+  return target.GetDistance() <= FIGHT_FIRST_M && combat.IsTargetVisible(target);
+ }
+
  static bool Fit(IEntity soldier)
  {
   if (!BBB.IsAlive(soldier)) return false;
@@ -552,9 +567,17 @@ modded class SCR_AIMedicHealBehavior
   if (!healer || !casualty) return priority;
   // BBB_Drag: move the casualty into cover first (ACE Carrying, when loaded).
   if (BBB_Drag.Busy(healer)) return 0;
-  if (BBB_Drag.Consider(m_Utility, healer, casualty, EvaluatePriorityLevel())) return 0;
   bool fullOn = BBB_Medic.On(healer);
   bool smokeOn = BBB_Medic.SmokeOn(healer);
+  if ((fullOn || smokeOn) && EvaluatePriorityLevel() < PRIORITY_LEVEL_GAMEMASTER && BBB_Medic.FightFirst(m_Utility))
+  {
+   if (m_iBBBDecision != BBB_Medic.HOLD_FIGHTING) PrintFormat("[BBB] MEDIC %1 -> %2: %3", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), BBB_Medic.Reason(BBB_Medic.HOLD_FIGHTING));
+   m_iBBBDecision = BBB_Medic.HOLD_FIGHTING;
+   BBB_Medic.MarkGoing(healer, null);
+   BBB_Medic.MarkHeld(casualty);
+   return 0;
+  }
+  if (BBB_Drag.Consider(m_Utility, healer, casualty, EvaluatePriorityLevel())) return 0;
   if (!fullOn && !smokeOn)
   {
    // Vanilla healing (off, or the test's vanilla side): on his way while this runs.

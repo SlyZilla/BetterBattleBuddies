@@ -116,7 +116,7 @@ class BBB_Rearm
    if (aff) targetFac = aff.GetAffiliatedFaction();
    if (soldierFac && targetFac && !soldierFac.IsFactionEnemy(targetFac)) continue;
    if (vector.Distance(soldierPos, target.GetOrigin()) > 300.0) continue;
-   if (BBB_Armour.IsArmoredThreat(target)) return true;
+   if (BBB_Armour.IsCombatVehicle(target)) return true;
   }
   return false;
  }

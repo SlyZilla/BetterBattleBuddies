@@ -11,8 +11,12 @@
 // When such a pair is a soldier's pick he holds that fire and his target picker turns to
 // targets he can hurt (see the modded combat component below). Works with any mod's
 // vehicles and ammo; no tables.
+// Only real armour (perceived as medium or heavy: APCs, IFVs, tanks) is judged. Jeeps,
+// Humvees and trucks are not: their hulls soak single rifle hits, but their crews (an
+// exposed PKM or M2 gunner above all) can be shot, and holding fire at them left
+// riflemen watching a UAZ gunner kill them (20 Oct live, ACA Everon).
 // Host options: -bbbArmour 0 (off), -bbbArmourHits <n> (hits before a verdict, default 12),
-//               -bbbArmourScatter 0 / -bbbAntiArmor 0 (off).
+//               -bbbArmourScatter 1 / -bbbAntiArmor 1 (opt-in: non-AT men go low near armour).
 class BBB_ArmourStat : Managed
 {
  int m_iHits;
@@ -35,7 +39,7 @@ class BBB_Armour
  static bool s_bRead;
  static bool s_bOn = true;
  static bool s_bLearn = true; // learning runs even while a test switches the behaviour off
- static bool s_bScatter = true;
+ static bool s_bScatter = false; // forced crouch/prone near armour: no behaviour A/B yet
  static int s_iMinHits = 12;
  static const float THROUGH_SHARE = 0.1;
  static const float HIT_EFFECTIVE = 1.0; // effective damage that counts as getting through
@@ -44,6 +48,7 @@ class BBB_Armour
  static const float AA_DURATION_MIN_S = 8.0;
  static const float AA_DURATION_MAX_S = 14.0;
  static const int AA_WATCH_MS = 250;
+ static const float AA_SEEN_S = 10.0; // only armour seen this recently makes men go low
  static ref map<string, ref BBB_ArmourStat> s_Stats = new map<string, ref BBB_ArmourStat>();
  static ref array<ref BBB_AntiArmorJob> s_aAntiArmorJobs = {};
  static bool s_bAntiArmorWatching;
@@ -65,7 +70,8 @@ class BBB_Armour
   string value;
   if (System.GetCLIParam("bbbArmour", value) && value == "0") { s_bOn = false; s_bLearn = false; }
   if (System.GetCLIParam("bbbArmourHits", value)) s_iMinHits = Math.Max(1, value.ToInt());
-  if ((System.GetCLIParam("bbbArmourScatter", value) && value == "0") || (System.GetCLIParam("bbbAntiArmor", value) && value == "0")) s_bScatter = false;
+  if (System.GetCLIParam("bbbArmourScatter", value)) s_bScatter = value == "1";
+  if (System.GetCLIParam("bbbAntiArmor", value)) s_bScatter = value == "1";
   PrintFormat("[BBB] ARMOUR on=%1 hits=%2 scatter=%3", s_bOn, s_iMinHits, s_bScatter);
  }
 
@@ -123,6 +129,16 @@ class BBB_Armour
  }
 
  // The vehicle an entity is (or sits in), else null.
+ // Armour worth judging: perceived as a medium or heavy vehicle (APC, IFV, tank).
+ static bool Armoured(IEntity vehicle)
+ {
+  if (!vehicle) return false;
+  PerceivableComponent perceivable = PerceivableComponent.Cast(vehicle.FindComponent(PerceivableComponent));
+  if (!perceivable) return false;
+  EAIUnitType type = perceivable.GetUnitType();
+  return type == EAIUnitType.UnitType_VehicleMedium || type == EAIUnitType.UnitType_VehicleHeavy;
+ }
+
  static IEntity VehicleOf(IEntity entity)
  {
   if (!entity) return null;
@@ -174,7 +190,7 @@ class BBB_Armour
  // A kinetic hit on a vehicle part (vehicle damage managers).
  static void OnVehicleHit(IEntity vehicle, notnull BaseDamageContext context)
  {
-  if (!s_bLearn || context.damageType != EDamageType.KINETIC || !context.damageSource || Aircraft(vehicle)) return;
+  if (!s_bLearn || context.damageType != EDamageType.KINETIC || !context.damageSource || Aircraft(vehicle) || !Armoured(vehicle)) return;
   int t = System.GetTickCount();
   string ammo = Round(PrefabKey(context.damageSource));
   string kind = PrefabKey(vehicle);
@@ -196,7 +212,7 @@ class BBB_Armour
  {
   if (!s_bLearn || context.damageType != EDamageType.KINETIC || !context.damageSource) return;
   IEntity vehicle = VehicleOf(occupant);
-  if (!vehicle || Aircraft(vehicle)) return;
+  if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return;
   string ammo = Round(PrefabKey(context.damageSource));
   string kind = PrefabKey(vehicle);
   if (ammo == "" || kind == "") return;
@@ -221,7 +237,7 @@ class BBB_Armour
  {
   if (!target || !magazine || s_Stats.IsEmpty()) return false;
   IEntity vehicle = VehicleOf(target.GetTargetEntity());
-  if (!vehicle || Aircraft(vehicle)) return false;
+  if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return false;
   string kind = PrefabKey(vehicle);
   string ammo = Round(Key(magazine.GetAmmoType(0)));
   BBB_ArmourStat stat = s_Stats.Get(kind + "|" + ammo);
@@ -232,7 +248,7 @@ class BBB_Armour
  {
   if (!targetEntity || !magazine || s_Stats.IsEmpty()) return false;
   IEntity vehicle = VehicleOf(targetEntity);
-  if (!vehicle || Aircraft(vehicle)) return false;
+  if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return false;
   BBB_ArmourStat stat = s_Stats.Get(PrefabKey(vehicle) + "|" + Round(Key(magazine.GetAmmoType(0))));
   return stat && stat.m_bUseless;
  }
@@ -322,19 +338,20 @@ class BBB_Armour
   return false;
  }
 
+ // Armour or anything with a turret (a gun truck, an M2 Humvee): worth a launcher (BBB_Rearm).
+ static bool IsCombatVehicle(IEntity entity)
+ {
+  IEntity vehicle = VehicleOf(entity);
+  if (!vehicle || Aircraft(vehicle)) return false;
+  return Armoured(vehicle) || BBB_VehicleHelpers.HasTurret(vehicle);
+ }
+
  static bool IsArmoredThreat(IEntity entity)
  {
   if (!entity) return false;
   IEntity vehicle = VehicleOf(entity);
-  if (!vehicle || Aircraft(vehicle)) return false;
-  PerceivableComponent perc = PerceivableComponent.Cast(vehicle.FindComponent(PerceivableComponent));
-  if (perc)
-  {
-   EAIUnitType ut = perc.GetUnitType();
-   if (ut == EAIUnitType.UnitType_VehicleHeavy || ut == EAIUnitType.UnitType_VehicleMedium) return true;
-  }
-  if (BBB_VehicleHelpers.HasTurret(vehicle)) return true;
-  return false;
+  // A turret alone isn't armour: a UAZ or Humvee gunner is shot back at, not hidden from.
+  return !Aircraft(vehicle) && Armoured(vehicle);
  }
 
  static bool EligibleForAntiArmor(SCR_AIUtilityComponent utility, IEntity soldier)
@@ -385,7 +402,7 @@ class BBB_Armour
     memberUtil.m_PerceptionComponent.GetTargetsList(targets, ETargetCategory.ENEMY);
     foreach (BaseTarget target : targets)
     {
-     if (!target || !target.GetTargetEntity()) continue;
+     if (!target || !target.GetTargetEntity() || target.GetTimeSinceSeen() > AA_SEEN_S) continue;
      if (IsArmoredThreat(target.GetTargetEntity()))
      {
       threat = target.GetTargetEntity();

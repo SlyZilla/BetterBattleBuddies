@@ -212,6 +212,56 @@ class BBB_VanillaTest
   return ok;
  }
 
+ // Pinned in the open keeps alerted perception; pinned in cover, unpinned or switched off
+ // leaves vanilla's value (the live perception component has no getter: BBB records what it set).
+ static bool TestExposedFire(SCR_AIGroup group)
+ {
+  array<AIAgent> agents = {};
+  if (group) group.GetAgents(agents);
+  if (agents.IsEmpty() || !agents[0]) return false;
+  SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agents[0].FindComponent(SCR_AIUtilityComponent));
+  if (!utility || !utility.m_ThreatSystem || !utility.m_CombatComponent || !utility.m_CombatMoveState || !utility.m_PerceptionComponent) return false;
+  SCR_AICombatComponent combat = utility.m_CombatComponent;
+  bool savedOn = BBB_ExposedFire.s_bOn;
+  bool savedCover = utility.m_CombatMoveState.m_bInCover;
+  float s0, sh0, in0, en0;
+  utility.m_ThreatSystem.GetThreatValues(s0, sh0, in0, en0);
+  BBB_ExposedFire.Read();
+  BBB_ExposedFire.s_bOn = true;
+
+  utility.m_ThreatSystem.SetThreatValues(0.95, 0, 0, 0);
+  utility.m_ThreatSystem.Update(utility, 1.0);
+  bool pinned = utility.m_ThreatSystem.GetState() == EAIThreatState.THREATENED;
+  utility.m_CombatMoveState.m_bInCover = false;
+  combat.UpdatePerceptionFactor(utility.m_PerceptionComponent, utility.m_ThreatSystem);
+  float open = combat.m_fBBBExposedPerception;
+  bool openOK = pinned && Math.AbsFloat(open - BBB_ExposedFire.ALERTED_PERCEPTION * combat.GetPerceptionFactor()) < 0.001;
+
+  utility.m_CombatMoveState.m_bInCover = true;
+  combat.UpdatePerceptionFactor(utility.m_PerceptionComponent, utility.m_ThreatSystem);
+  bool coverOK = combat.m_fBBBExposedPerception == 0;
+
+  utility.m_CombatMoveState.m_bInCover = false;
+  BBB_ExposedFire.s_bOn = false;
+  combat.UpdatePerceptionFactor(utility.m_PerceptionComponent, utility.m_ThreatSystem);
+  bool offOK = combat.m_fBBBExposedPerception == 0;
+  BBB_ExposedFire.s_bOn = true;
+
+  utility.m_ThreatSystem.SetThreatValues(0.0, 0, 0, 0);
+  utility.m_ThreatSystem.Update(utility, 1.0);
+  combat.UpdatePerceptionFactor(utility.m_PerceptionComponent, utility.m_ThreatSystem);
+  bool calmOK = utility.m_ThreatSystem.GetState() != EAIThreatState.THREATENED && combat.m_fBBBExposedPerception == 0;
+
+  utility.m_CombatMoveState.m_bInCover = savedCover;
+  utility.m_ThreatSystem.SetThreatValues(s0, sh0, in0, en0);
+  utility.m_ThreatSystem.Update(utility, 1.0);
+  BBB_ExposedFire.s_bOn = savedOn;
+  combat.UpdatePerceptionFactor(utility.m_PerceptionComponent, utility.m_ThreatSystem);
+  bool ok = openOK && coverOK && offOK && calmOK;
+  PrintFormat("[BBB] EXPOSEDFIRE regression ok=%1 pinnedOpen=%2 (perception %3) inCoverVanilla=%4 offVanilla=%5 calmVanilla=%6", ok, openOK, open, coverOK, offOK, calmOK);
+  return ok;
+ }
+
  static bool TestAntiArmor(SCR_AIGroup group, IEntity vehicle)
  {
   if (!group || !vehicle) return false;
@@ -225,10 +275,15 @@ class BBB_VanillaTest
   // 1. HasOperationalAT check (rifleman should not have AT)
   bool riflemanHasAT = BBB_Armour.HasOperationalAT(soldier0);
 
-  // 2. IsArmoredThreat check (armed M1025 with M2HB turret should be true)
+  // 2. The armed M1025 (M2HB turret, perceived unarmoured) is not armour: men shoot its
+  // gunner instead of going low, and their rounds aren't held as useless against it.
   bool isThreat = BBB_Armour.IsArmoredThreat(vehicle);
+  bool notArmour = !isThreat && !BBB_Armour.Armoured(vehicle);
 
-  // 3. Scatter execution: call CheckGroupAntiArmor with forced threat
+  // 3. Scatter execution (opt-in, forced on here): call CheckGroupAntiArmor with forced threat
+  bool savedScatter = BBB_Armour.s_bScatter;
+  bool scatterDefaultOff = !BBB_Armour.ScatterOn();
+  BBB_Armour.s_bScatter = true;
   BBB_Armour.Stop();
   float nowMs = GetGame().GetWorld().GetWorldTime();
   BBB_Armour.CheckGroupAntiArmor(group, vehicle);
@@ -242,6 +297,7 @@ class BBB_VanillaTest
   BBB_Armour.StepAntiArmor(nowMs + 30000.0);
   bool recovered = !BBB_Armour.InAntiArmorJob(soldier0) && (job == null || job.m_StanceSetting == null);
   BBB_Armour.Stop();
+  BBB_Armour.s_bScatter = savedScatter;
   foreach (AIAgent a : agents)
   {
    ChimeraCharacter c = ChimeraCharacter.Cast(a.GetControlledEntity());
@@ -252,8 +308,8 @@ class BBB_VanillaTest
    }
   }
 
-  bool ok = !riflemanHasAT && isThreat && scattered && stanceApplied && recovered;
-  PrintFormat("[BBB] ANTIARMOR regression ok=%1 noAT=%2 isThreat=%3 lowStance=%4 stance=%5 recovered=%6", ok, !riflemanHasAT, isThreat, scattered, stanceApplied, recovered);
+  bool ok = !riflemanHasAT && notArmour && scatterDefaultOff && scattered && stanceApplied && recovered;
+  PrintFormat("[BBB] ANTIARMOR regression ok=%1 noAT=%2 humveeNotArmour=%3 defaultOff=%4 lowStance=%5 stance=%6 recovered=%7", ok, !riflemanHasAT, notArmour, scatterDefaultOff, scattered, stanceApplied, recovered);
   return ok;
  }
 
@@ -515,6 +571,7 @@ class BBB_VanillaTest
  static bool s_bSelectorOK;
  static bool s_bThreatOK;
  static bool s_bAntiArmorOK;
+ static bool s_bExposedFireOK;
  static bool s_bRearmOK;
  static int s_iFramesCounted;
  static IEntity s_RearmGroup;
@@ -608,7 +665,7 @@ class BBB_VanillaTest
 
   bool found = mine != null;
   string verdict = "FAIL";
-  if (BBB.IsStarted() && BBB_VanillaHooks.Cast(BBB.s_Hooks) && found && s_iFramesCounted > 30 && s_bSelectorOK && s_bThreatOK && turretOK && s_bAntiArmorOK && s_bRearmOK) verdict = "PASS";
+  if (BBB.IsStarted() && BBB_VanillaHooks.Cast(BBB.s_Hooks) && found && s_iFramesCounted > 30 && s_bSelectorOK && s_bThreatOK && s_bExposedFireOK && turretOK && s_bAntiArmorOK && s_bRearmOK) verdict = "PASS";
   PrintFormat("[BBB] VANILLATEST %1", verdict);
   PrintFormat("[ACR] VERDICT %1 test=bbbvanilla started=%2 found=%3 frames=%4", verdict, BBB.IsStarted(), found, s_iFramesCounted);
   if (s_SpawnedTruck) SCR_EntityHelper.DeleteEntityAndChildren(s_SpawnedTruck);
@@ -630,6 +687,7 @@ class BBB_VanillaTest
 
   s_bSelectorOK = TestSelector(mine);
   s_bThreatOK = TestThreat(mine);
+  s_bExposedFireOK = TestExposedFire(mine);
   s_bRearmOK = TestRearm(SCR_AIGroup.Cast(s_RearmGroup));
   if (s_RearmGroup) SCR_EntityHelper.DeleteEntityAndChildren(s_RearmGroup);
 

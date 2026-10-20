@@ -190,6 +190,17 @@ class BBB_Drag
   return false;
  }
 
+ // A visible enemy this close to a dragger: he lets go and fights.
+ static const float DEFEND_M = 20;
+ static bool Defend(SCR_AIUtilityComponent utility)
+ {
+  if (!utility || !utility.m_CombatComponent) return false;
+  BaseTarget target = utility.m_CombatComponent.GetCurrentTarget();
+  if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.IsDisarmed()) return false;
+  if (utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) return false;
+  return target.GetDistance() <= DEFEND_M && utility.m_CombatComponent.IsTargetVisible(target);
+ }
+
  static bool BeingMoved(IEntity casualty)
  {
   foreach (BBB_DragJob job : s_aJobs)
@@ -484,12 +495,13 @@ class BBB_Drag
 }
 
 // While dragging or carrying, the AI mustn't take a weapon in hand: ACE Carrying drops the
-// casualty as soon as the carrier selects a weapon (its player rule).
+// casualty as soon as the carrier selects a weapon (its player rule). Unless an enemy he
+// can see is within DEFEND_M: then he drops the casualty and fights (BBB_Drag.Defend).
 modded class SCR_AISwitchWeapon
 {
  override ENodeResult EOnTaskSimulate(AIAgent owner, float dt)
  {
-  if (owner && BBB_Drag.Busy(owner.GetControlledEntity())) return ENodeResult.FAIL;
+  if (owner && BBB_Drag.Busy(owner.GetControlledEntity()) && !BBB_Drag.Defend(SCR_AIUtilityComponent.Cast(owner.FindComponent(SCR_AIUtilityComponent)))) return ENodeResult.FAIL;
   return super.EOnTaskSimulate(owner, dt);
  }
 }
@@ -526,7 +538,7 @@ modded class SCR_AIAttackBehavior
 {
  override float CustomEvaluate()
  {
-  if (m_Utility && BBB_Drag.Busy(m_Utility.m_OwnerEntity)) return 0;
+  if (m_Utility && BBB_Drag.Busy(m_Utility.m_OwnerEntity) && !BBB_Drag.Defend(m_Utility)) return 0;
   return super.CustomEvaluate();
  }
 }
@@ -535,16 +547,30 @@ modded class SCR_AIAttackBehavior
 // (4 Oct): a fire mode with (almost) no shot span (Math.RandomFloat min > max), a look
 // target at the soldier's own position and a zero-length combat move
 // (GenerateRandomPointInRadius 0..0). Same result, no error line. Always on.
+// Fire times: the short shot span is clamped in vanilla's own weapon cache before it runs.
+// (Until 20 Oct the node failed instead, so a soldier holding such a fire mode never fired.)
 modded class SCR_AIGetFireTimes
 {
+ static const float BBB_MIN_SHOT_SPAN = 0.053; // vanilla single fire: RandomFloat(0.1, span * 1.9)
+
  override ENodeResult EOnTaskSimulate(AIAgent owner, float dt)
  {
-  if (m_CombatComponent)
+  if (m_bValid && m_CombatComponent && m_ConfigComponent)
   {
    BaseWeaponComponent weapon = m_CombatComponent.GetCurrentWeapon();
-   if (weapon && weapon.GetCurrentMuzzle() && weapon.GetCurrentMuzzle().GetCurrentFireMode())
+   BaseMuzzleComponent muzzle;
+   BaseFireMode fireMode;
+   if (weapon) muzzle = weapon.GetCurrentMuzzle();
+   if (muzzle) fireMode = muzzle.GetCurrentFireMode();
+   if (fireMode && fireMode.GetShotSpan() < BBB_MIN_SHOT_SPAN && (weapon != m_LastWeapon || muzzle != m_LastMuzzle || fireMode != m_LastFireMode))
    {
-    if (weapon.GetCurrentMuzzle().GetCurrentFireMode().GetShotSpan() < 0.053) return ENodeResult.FAIL;
+    m_eLastWeaponType = SCR_AIWeaponHandling.GetWeaponType(weapon, true);
+    m_WeaponConfig = m_ConfigComponent.GetWeaponTypeHandlingConfig(m_eLastWeaponType);
+    m_fShotSpan = BBB_MIN_SHOT_SPAN;
+    m_fBurstSize = fireMode.GetBurstSize();
+    m_LastWeapon = weapon;
+    m_LastMuzzle = muzzle;
+    m_LastFireMode = fireMode;
    }
   }
   return super.EOnTaskSimulate(owner, dt);
