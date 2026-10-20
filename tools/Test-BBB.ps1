@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','crewturnout','driveralign','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','crewturnout','driveralign','driveraligncomplete','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath,
  [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120
@@ -52,6 +52,8 @@ $flags.crewturnout = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase turnout -b
 $flags.driveralign = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase alignment -bbbPerf 1'
 $timeouts.crewturnout = 120
 $timeouts.driveralign = 110
+$flags.driveraligncomplete = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase alignmentcomplete -bbbPerf 1'
+$timeouts.driveraligncomplete = 110
 $world = '{AC230926A00100E0}Worlds/BBB_TestArland.ent'
 if ($Preset -eq 'compile') { $world = '{77C41EA429B6AC35}worlds/GameMaster/GM_Arland.ent' }
 $argsLine = '-server "' + $world + '" -addonsDir "' + (Split-Path $AddonRoot -Parent) + '" -addons BBB0261015000001 -profile "' + $profile + '" -maxFPS 60 -noBackend ' + $flags[$Preset]
@@ -81,7 +83,8 @@ try {
 }
 $result = Join-Path $resultDir ($id + '.result.txt')
 $sha = 'uncommitted extraction'
-if (Test-Path -LiteralPath (Join-Path $root '.git/refs/heads/main')) { $sha = & git -C $root rev-parse HEAD }
+$sourceHead = & git -C $root rev-parse --verify HEAD
+if ($LASTEXITCODE -eq 0) { $sha = $sourceHead.Trim() }
 if (& git -C $root status --porcelain -- Scripts Configs Prefabs) { $sha += '+dirty' }
 @("status=$status", "preset=$Preset", "source=$sha", "addonRoot=$AddonRoot", "sourceManifest=$sourceSnapshot", "args=$argsLine", "log=$log", $body) | Set-Content -LiteralPath $result -Encoding UTF8
 Write-Output "BBB $Preset : $status; result=$result"

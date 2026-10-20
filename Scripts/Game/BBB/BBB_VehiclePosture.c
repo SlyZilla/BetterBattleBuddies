@@ -30,6 +30,23 @@ class BBB_VehiclePosture
   return suppression > 0.001 || shots > 0.001 || injury > 0.001 || endangered > 0.001;
  }
 
+ // Generic danger-event counts also include benign vehicle/crew events.
+ // Alignment needs actual incoming danger, not just a nonempty event queue.
+ static bool IncomingFire(SCR_AIUtilityComponent utility)
+ {
+  if (UnderFire(utility) || !utility.m_SectorThreatFilter) return true;
+  int major, minor;
+  utility.m_SectorThreatFilter.GetActiveSectors(major, minor);
+  array<int> sectors = {major, minor};
+  foreach (int sector : sectors)
+  {
+   if (!BBB_Combat.ValidSector(sector)) continue;
+   SCR_EAIThreatSectorFlags flags = utility.m_SectorThreatFilter.GetSectorFlags(sector);
+   if ((flags & SCR_EAIThreatSectorFlags.DIRECTED_AT_ME) || (flags & SCR_EAIThreatSectorFlags.CAUSED_DAMAGE)) return true;
+  }
+  return false;
+ }
+
  static bool KnownThreat(SCR_AIUtilityComponent utility, vector origin, float radius)
  {
   if (!utility || !utility.m_PerceptionComponent || !utility.m_CombatComponent) return true;
@@ -44,7 +61,9 @@ class BBB_VehiclePosture
   {
    if (!target) continue;
    // Use remembered positions; never inspect the unseen enemy's live transform.
-   if (vector.DistanceXZ(target.GetLastDetectedPosition(), origin) < radius) return true;
+   vector knownPosition = target.GetLastDetectedPosition();
+   if (target.GetTargetCategory() == ETargetCategory.ENEMY) knownPosition = target.GetLastSeenPosition();
+   if (vector.DistanceXZ(knownPosition, origin) < radius) return true;
   }
   return false;
  }

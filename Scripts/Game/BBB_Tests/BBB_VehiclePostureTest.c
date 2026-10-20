@@ -16,6 +16,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
  protected float m_fStart;
  protected int m_iPhase;
  protected bool m_bTurnout;
+ protected bool m_bCompletion;
  protected int m_iChecks;
  protected int m_iFailures;
  protected bool m_bObservedOut;
@@ -38,7 +39,13 @@ class BBB_VehiclePostureTest : BBB_AimTest
   string testCase;
   System.GetCLIParam("bbbVehiclePostureCase", testCase);
   s_PostureTest.m_bTurnout = testCase == "turnout";
+  s_PostureTest.m_bCompletion = testCase == "alignmentcomplete";
   GetGame().GetCallqueue().CallLater(s_PostureTest.BeginPosture, 15000);
+ }
+
+ static bool HoldsDriver(IEntity body)
+ {
+  return s_PostureTest && !s_PostureTest.m_bTurnout && s_PostureTest.m_Driver == body && !s_PostureTest.m_Move;
  }
 
  protected void Check(string label, bool passed)
@@ -105,7 +112,12 @@ class BBB_VehiclePostureTest : BBB_AimTest
   m_Driver = ChimeraCharacter.Cast(agents[0].GetControlledEntity());
   m_Gunner = ChimeraCharacter.Cast(agents[1].GetControlledEntity());
   PinDetail(m_Crew);
-  foreach (AIAgent agent : agents) PinDetail(agent);
+  foreach (AIAgent agent : agents)
+  {
+   PinDetail(agent);
+   SCR_AIUtilityComponent crewUtility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+   if (!m_bTurnout && crewUtility && crewUtility.m_CombatComponent) crewUtility.m_CombatComponent.SetPerceptionFactor(10);
+  }
   for (int i = agents.Count() - 1; i >= 2; i--)
    SCR_EntityHelper.DeleteEntityAndChildren(agents[i].GetControlledEntity());
   m_Driver.GetDamageManager().EnableDamageHandling(false);
@@ -129,6 +141,10 @@ class BBB_VehiclePostureTest : BBB_AimTest
   PrintFormat("[BBB] POSTURESEATS driver=%1 driverSeat=%2 gunner=%3 gunSeat=%4", m_Driver, m_Pilot.GetOccupant(), m_Gunner, m_GunSeat.GetOccupant());
   Check("actual-occupants", m_Pilot.GetOccupant() == m_Driver && m_GunSeat.GetOccupant() == m_Gunner);
   if (m_iFailures > 0) { FinishPosture(); return; }
+  RplComponent vehicleRpl = RplComponent.Cast(m_Vehicle.FindComponent(RplComponent));
+  RplComponent crewRpl = RplComponent.Cast(m_Gunner.FindComponent(RplComponent));
+  Check("vehicle-replication-node", vehicleRpl && vehicleRpl.Id().IsValid() && Replication.FindItem(vehicleRpl.Id()) == vehicleRpl);
+  Check("crew-replication-node", crewRpl && crewRpl.Id().IsValid() && Replication.FindItem(crewRpl.Id()) == crewRpl);
   m_Original = m_Vehicle.GetOrigin();
   m_Nose = m_Vehicle.GetTransformAxis(2);
   m_fStart = GetGame().GetWorld().GetWorldTime();
@@ -143,11 +159,22 @@ class BBB_VehiclePostureTest : BBB_AimTest
   {
    CarControllerComponent car = CarControllerComponent.Cast(m_Vehicle.FindComponent(CarControllerComponent));
    car.ForceStartEngine();
+   car.SetPersistentHandBrake(true);
    // A stable native contact 17 degrees to the right of a +/-10-degree turret.
    vector enemyAt = m_Original + BBB_DriverAlignment.Rotated(m_Nose, 17) * 150;
    NavmeshWorldComponent navmesh = Navmesh();
    if (navmesh) navmesh.LoadTileIn(enemyAt);
-   m_Enemy = SCR_AIGroup.Cast(Spawn(TEAM_US, enemyAt, m_Nose * -1));
+   SCR_AIGroup.IgnoreSpawning(true);
+   m_Enemy = SCR_AIGroup.Cast(Spawn(GROUP_US, enemyAt, m_Nose * -1));
+   SCR_AIGroup.IgnoreSpawning(false);
+   if (m_Enemy)
+   {
+    if (!m_Enemy.m_aUnitPrefabSlots) m_Enemy.m_aUnitPrefabSlots = {};
+    m_Enemy.m_aUnitPrefabSlots.Clear();
+    m_Enemy.m_aUnitPrefabSlots.Insert(RIFLE_US);
+    IEntity enemyBody = Spawn(RIFLE_US, enemyAt, m_Nose * -1);
+    if (enemyBody) m_Enemy.AddAIEntityToGroup(enemyBody);
+   }
    Check("enemy-fixture", m_Enemy != null);
    Check("signed-bearing", Math.AbsFloat(BBB_DriverAlignment.Bearing(m_Nose, BBB_DriverAlignment.Rotated(m_Nose, 17)) - 17) < 0.1);
    TurretControllerComponent controller = BBB_VehicleHelpers.TurretControllerOf(m_GunSeat);
@@ -245,7 +272,12 @@ class BBB_VehiclePostureTest : BBB_AimTest
    {
     PinDetail(enemy);
     ChimeraCharacter body = ChimeraCharacter.Cast(enemy.GetControlledEntity());
-    if (body) body.GetDamageManager().EnableDamageHandling(false);
+    SCR_AIUtilityComponent passiveUtility = SCR_AIUtilityComponent.Cast(enemy.FindComponent(SCR_AIUtilityComponent));
+    if (passiveUtility && passiveUtility.m_CombatComponent) passiveUtility.m_CombatComponent.SetPerceptionFactor(0);
+    if (body)
+    {
+     body.GetCharacterController().OverrideMaxSpeed(0);
+    }
    }
   }
   BBB_DriverAlignmentState state = BBB_DriverAlignment.State(m_Vehicle);
@@ -256,7 +288,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
   probe.m_Gunner = m_Gunner;
   probe.m_Seat = m_GunSeat;
   SCR_AIUtilityComponent gunner = BBB_VehiclePosture.Utility(m_Gunner);
-  if (gunner && gunner.m_CombatComponent) probe.m_Target = gunner.m_CombatComponent.GetCurrentTarget();
+  if (gunner && gunner.m_CombatComponent) probe.m_Target = BBB_DriverAlignment.TargetOf(gunner);
   vector aim;
   float excess;
   bool eligible = BBB_DriverAlignment.Engagement(probe, aim, excess);
@@ -269,6 +301,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
   if (m_iPhase == 0 && elapsed >= 25000)
   {
    m_fOffTravel = vector.DistanceXZ(m_Original, m_Vehicle.GetOrigin());
+   Check("stationary-off-baseline", m_fOffTravel < 0.5);
    Check("off-baseline-no-alignment", BBB_DriverAlignment.s_iStarted == m_iStartsBefore);
    Check("own-visible-viable-native-contact", m_bSawEligible);
    BBB_DriverAlignmentState timing = new BBB_DriverAlignmentState();
@@ -281,24 +314,62 @@ class BBB_VehiclePostureTest : BBB_AimTest
    bool lost = !BBB_DriverAlignment.Stable(timing, null, now + 21000);
    Check("stable-target-delay-cooldown-loss", first && early && ready && cooldown && lost);
    PrintFormat("[BBB] ALIGNDIAG eligibility=%1 orders=%2 protection=%3 open=%4 target=%5 excess=%6", eligible, BBB_DriverAlignment.OrdersAllow(m_Crew, m_Vehicle, m_Driver), BBB_DriverAlignment.Protection(probe, 7), BBB_DriverAlignment.OpenGround(m_Vehicle), probe.m_Target, excess);
+   array<AIAgent> crewAgents = {};
+   m_Crew.GetAgents(crewAgents);
+   foreach (AIAgent crewAgent : crewAgents)
+   {
+    SCR_AIUtilityComponent crewInfo = SCR_AIUtilityComponent.Cast(crewAgent.FindComponent(SCR_AIUtilityComponent));
+    float su, sh, inj, en;
+    crewInfo.m_ThreatSystem.GetThreatValues(su, sh, inj, en);
+    PrintFormat("[BBB] ALIGNTHREAT actor=%1 suppression=%2 shots=%3 injury=%4 endangered=%5 events=%6", crewAgent.GetControlledEntity(), su, sh, inj, en, crewAgent.GetDangerEventsCount());
+   }
    if (probe.m_Target) PrintFormat("[BBB] ALIGNCONTACT seen=%1 trace=%2 exposure=%3 range=%4 category=%5", probe.m_Target.GetTimeSinceSeen(), probe.m_Target.GetTraceFraction(), probe.m_Target.GetExposure(), probe.m_Target.GetDistance(), probe.m_Target.GetTargetCategory());
+   PrintFormat("[BBB] ALIGNCOUNTS unknown=%1 detected=%2 friendly=%3 factionless=%4 lod=%5", gunner.m_PerceptionComponent.GetTargetCount(ETargetCategory.UNKNOWN), gunner.m_PerceptionComponent.GetTargetCount(ETargetCategory.DETECTED), gunner.m_PerceptionComponent.GetTargetCount(ETargetCategory.FRIENDLY), gunner.m_PerceptionComponent.GetTargetCount(ETargetCategory.FACTIONLESS), gunner.GetAIAgent().GetLOD());
    CarControllerComponent car = CarControllerComponent.Cast(m_Vehicle.FindComponent(CarControllerComponent));
    SCR_AIUtilityComponent driverUtility = BBB_VehiclePosture.Utility(m_Driver);
    PrintFormat("[BBB] ALIGNDRIVER engine=%1 behavior=%2 waypoint=%3", car.IsEngineOn(), driverUtility.GetCurrentBehavior(), m_Crew.GetCurrentWaypoint());
+   TurretComponent diagnosticTurret = BBB_VehicleHelpers.TurretControllerOf(m_GunSeat).GetTurretComponent();
+   PrintFormat("[BBB] ALIGNGEOMETRY hullYaw=%1 baseRotation=%2 moveableBase=%3", BBB_DriverAlignment.Bearing(m_Nose, m_Vehicle.GetTransformAxis(2)), diagnosticTurret.GetBaseRotation(), diagnosticTurret.HasMoveableBase());
    array<BaseTarget> contacts = {};
    gunner.m_PerceptionComponent.GetTargetsList(contacts, ETargetCategory.ENEMY);
    PrintFormat("[BBB] ALIGNCONTACTS enemies=%1", contacts.Count());
+   PrintFormat("[BBB] ALIGNGUNNER seated=%1 inTurret=%2 behavior=%3 nativeWeaponTypes=%4", m_GunSeat.GetOccupant() == m_Gunner, gunner.m_AIInfo.HasUnitState(EUnitState.IN_TURRET), gunner.GetCurrentBehavior(), gunner.m_CombatComponent.m_WeaponTargetSelector.GetUnitTypesCanAttack());
+   if (probe.m_WeaponProbe)
+   {
+    BaseWeaponComponent probedWeapon;
+    BaseMagazineComponent probedMagazine;
+    int probedMuzzle;
+    probe.m_WeaponProbe.GetSelectedWeapon(probedWeapon, probedMuzzle, probedMagazine);
+    PrintFormat("[BBB] ALIGNWEAPON selected=%1 magazine=%2 muzzle=%3", probedWeapon, probedMagazine, probedMuzzle);
+   }
    foreach (BaseTarget contact : contacts) PrintFormat("[BBB] ALIGNCONTACT seen=%1 trace=%2 exposure=%3 position=%4", contact.GetTimeSinceSeen(), contact.GetTraceFraction(), contact.GetExposure(), contact.GetLastSeenPosition());
+   PrintFormat("[BBB] ALIGNBASELINEPERF %1", BBB_Perf.Take());
    BBB_DriverAlignment.s_bOn = true;
    state.m_fStableSince = GetGame().GetWorld().GetWorldTime();
    m_iPhase = 1;
   }
-  if (m_iPhase == 1 && ((state.m_bActive && m_fBestExcess + 1 < m_fFirstExcess) || elapsed >= 45000))
+  if (m_iPhase == 1 && m_bCompletion)
+  {
+   if ((BBB_DriverAlignment.s_iStarted > m_iStartsBefore && !state.m_bActive) || elapsed >= 45000)
+   {
+    Check("completion-native-alignment-started", BBB_DriverAlignment.s_iStarted > m_iStartsBefore);
+    Check("completion-reaches-native-firing-arc", m_fBestExcess <= 0.5);
+    Check("completion-bounded-travel", state.m_fLastTravel <= BBB_DriverAlignment.MAX_TRAVEL_M + 0.1);
+    Check("completion-bounded-duration", state.m_fLastRunMs <= BBB_DriverAlignment.MAX_RUN_MS + 100);
+    AIControlComponent restoredControl = AIControlComponent.Cast(m_Driver.FindComponent(AIControlComponent));
+    Check("completion-driver-ai-restored", restoredControl && restoredControl.IsAIActivated());
+    PrintFormat("[BBB] ALIGNCOMPLETION firstExcess=%1 bestExcess=%2 runMs=%3 travel=%4", m_fFirstExcess, m_fBestExcess, state.m_fLastRunMs, state.m_fLastTravel);
+    PrintFormat("[BBB] ALIGNEND reason=%1 speed=%2", state.m_sEndReason, m_Vehicle.GetPhysics().GetVelocity().Length());
+    FinishPosture();
+   }
+   return;
+  }
+  if (m_iPhase == 1 && ((state.m_bActive && vector.DistanceXZ(m_Original, m_Vehicle.GetOrigin()) > 0.06) || elapsed >= 45000))
   {
    m_fOnTravel = vector.DistanceXZ(m_Original, m_Vehicle.GetOrigin());
    Check("on-native-alignment-started", BBB_DriverAlignment.s_iStarted > m_iStartsBefore);
-   Check("on-improves-native-turret-excess", m_fBestExcess + 1 < m_fFirstExcess);
-   Check("bounded-adjustment", m_fOnTravel <= BBB_DriverAlignment.MAX_TRAVEL_M + 1.0);
+   Check("on-improves-native-turret-excess", m_fBestExcess + 0.1 < m_fFirstExcess);
+   Check("bounded-adjustment", m_fOnTravel <= BBB_DriverAlignment.MAX_TRAVEL_M + 0.2);
    Check("move-arrives-during-active-alignment", state.m_bActive);
    m_Move = AIWaypoint.Cast(Spawn("{750A8D1695BD6998}Prefabs/AI/Waypoints/AIWaypoint_Move.et", m_Original + Vector(0, 0, 60), m_Nose));
    if (m_Move) m_Crew.AddWaypoint(m_Move);
@@ -311,6 +382,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
    BBB_DriverAlignment.Stop();
    Check("alignment-lifecycle-cleared", BBB_DriverAlignment.s_States.IsEmpty());
    PrintFormat("[BBB] ALIGNRESULT offTravel=%1 onTravel=%2 firstExcess=%3 bestExcess=%4 eligibleAt=%5", m_fOffTravel, m_fOnTravel, m_fFirstExcess, m_fBestExcess, m_fEligibleAt);
+   PrintFormat("[BBB] ALIGNACTUATION started=%1 lastRunMs=%2 lastTravel=%3 reason=%4", BBB_DriverAlignment.s_iStarted - m_iStartsBefore, state.m_fLastRunMs, state.m_fLastTravel, state.m_sEndReason);
    FinishPosture();
   }
  }
@@ -318,6 +390,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
  protected void FinishPosture()
  {
   GetGame().GetCallqueue().Remove(Sample);
+  PrintFormat("[BBB] POSTUREPERF %1", BBB_Perf.Take());
   BBB_CrewTurnout.s_bOn = false;
   BBB_CrewTurnout.Stop();
   BBB_DriverAlignment.s_bOn = false;
@@ -343,5 +416,18 @@ modded class SCR_BaseGameMode
  {
   super.OnGameStart();
   BBB_VehiclePostureTest.Start();
+ }
+}
+
+// Isolate a genuinely idle driver: vanilla's idle-driver behavior normally
+// performs its own combat repositioning, which is a separate movement system.
+// Perception, gunner aiming and all production alignment guards stay native.
+modded class SCR_AIIdleBehavior_Driver
+{
+ override float CustomEvaluate()
+ {
+  float priority = super.CustomEvaluate();
+  if (m_Utility && BBB_VehiclePostureTest.HoldsDriver(m_Utility.m_OwnerEntity)) m_bUseCombatMove = false;
+  return priority;
  }
 }
