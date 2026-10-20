@@ -64,6 +64,8 @@ class BBB
  static void Stop()
  {
   if (GetGame()) GetGame().GetCallqueue().Remove(Tick);
+  BBB_DriverAlignment.Stop();
+  BBB_CrewTurnout.Stop();
   BBB_Unstick.StopAll();
   BBB_FireManeuver.Stop();
   BBB_Drag.Stop();
@@ -85,6 +87,10 @@ class BBB
  static void Tick()
  {
   int t = System.GetTickCount();
+  BBB_CrewTurnout.Tick();
+  t = BBB_Perf.Lap("tick.crewTurnout", t);
+  BBB_DriverAlignment.Tick();
+  t = BBB_Perf.Lap("tick.driverAlign", t);
   if (s_VehicleHelpers) s_VehicleHelpers.Tick();
   t = BBB_Perf.Lap("tick.vehicleHelpers", t);
 		if (s_Launchers) s_Launchers.Tick();
@@ -119,6 +125,7 @@ class BBB
   s_iFrames++;
   BBB_Perf.OnFrame();
   BBB_Unstick.FrameAll();
+  BBB_DriverAlignment.Frame();
  }
 
  // ---------------------------------------------------------------- helpers

@@ -2,6 +2,9 @@
 
 ## 0.1.5 — unreleased
 
+- Added optional armored-crew turnout (`-bbbCrewTurnout 1`): supported AI crew positions turn out after a quiet period, then button up when threats, incoming fire or vehicle hits return.
+- Added optional limited-turret driver alignment (`-bbbDriverAlign 1`): idle AI drivers can make a small adjustment on clear, level ground for their gunner's visible, viable target. Movement orders, player control and unsafe positions prevent the adjustment.
+
 ## 0.1.4 — released
 
 - Expanded the Workshop overview with standalone scenario use, squad-command compatibility, server options and public GitHub source/issue links.

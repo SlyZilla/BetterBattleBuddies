@@ -53,6 +53,17 @@ remain opt-in.
 AC: Actual integrates through BBB's host hooks and manages its own commander,
 bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
 
+### Unreleased source options
+
+The source checkout also includes two experimental options, both off by default:
+
+- `-bbbCrewTurnout 1`: armored AI crews use native turnout positions after 30 quiet seconds. Nearby known threats, incoming fire, suppression and vehicle hits keep them buttoned up. Only supported crew seats are used.
+- `-bbbDriverAlign 1`: an idle wheeled-vehicle driver may make a short forward steering adjustment for a stable target the gunner currently sees and can engage. It requires clear, level ground, yields to any waypoint or player/GM order, and leaves host-managed driving alone. The adjustment is limited to 1.5 m, 20 degrees and five seconds, followed by a cooldown. It does not search for targets or firing lines.
+
+Use `0` in place of `1` to disable either option. These source features are not in
+Workshop 0.1.4. Native tracked-vehicle driving, custom vehicle armor layouts and
+multiplayer visual acceptance require separate validation.
+
 ## Reporting problems
 
 **[Report a bug](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=01-bug-report.yml)**

@@ -238,6 +238,7 @@ class BBB_VehicleHelpers : Managed
    }
 
    int turnOut = comp.GetTurnOutDoorIndex();
+   if (turnOut >= 0 && BBB_CrewTurnout.KeepsHatch(comp) && !checkedDoors.Contains(turnOut)) checkedDoors.Insert(turnOut);
    if (turnOut >= 0 && !checkedDoors.Contains(turnOut))
    {
     checkedDoors.Insert(turnOut);

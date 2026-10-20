@@ -1,0 +1,8 @@
+Turret : "{66596659FB0F645B}Prefabs/Vehicles/Wheeled/BTR70/VehParts/Turret/BTR70_Turret.et" {
+ ID "BBB0A11900000011"
+ components {
+  TurretControllerComponent "{51ACD09C61C183E4}" {
+   LimitsHoriz -10 10
+  }
+ }
+}
