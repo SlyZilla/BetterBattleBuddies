@@ -315,7 +315,9 @@ class BBB_Smoke
 		IEntity thrower = FindBestThrower(group, smokePos, preferred, exclude);
 		if (!thrower) return false;
 
-		SCR_AIUtilityComponent throwerUtil = SCR_AIUtilityComponent.Cast(thrower.FindComponent(SCR_AIUtilityComponent));
+		AIControlComponent control = AIControlComponent.Cast(thrower.FindComponent(AIControlComponent));
+		if (!control || !control.GetAIAgent()) return false;
+		SCR_AIUtilityComponent throwerUtil = SCR_AIUtilityComponent.Cast(control.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
 		if (!throwerUtil) return false;
 
 		// Execute throw via native behavior

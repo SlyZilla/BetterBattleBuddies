@@ -43,6 +43,7 @@ class BBB_SurrenderState : Managed
 	SCR_AIUtilityComponent m_Utility;
 	float m_fSurrenderSince;
 	bool m_bDisarmed;
+	bool m_bWasActivated;
 }
 
 class BBB_Morale
@@ -577,14 +578,20 @@ class BBB_Morale
 
 		// 5. Deactivate AI so the surrendered soldier stays in place quietly
 		AIControlComponent ai = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
-		if (ai && ai.IsAIActivated()) ai.DeactivateAI();
+		bool wasActivated = false;
+		if (ai)
+		{
+			wasActivated = ai.IsAIActivated();
+			if (wasActivated) ai.DeactivateAI();
+		}
 
-		// 5. Store state
+		// 6. Store state
 		BBB_SurrenderState sState = new BBB_SurrenderState();
 		sState.m_Soldier = soldier;
 		sState.m_Utility = utility;
 		sState.m_fSurrenderSince = GetGame().GetWorld().GetWorldTime();
 		sState.m_bDisarmed = true;
+		sState.m_bWasActivated = wasActivated;
 		s_Surrendered.Insert(sState);
 
 		s_iSurrenders++;
@@ -686,7 +693,7 @@ class BBB_Morale
 		// Restore AI for surrendered soldiers
 		foreach (BBB_SurrenderState ss : s_Surrendered)
 		{
-			if (ss && ss.m_Soldier && BBB.IsAlive(ss.m_Soldier))
+			if (ss && ss.m_Soldier && ss.m_bWasActivated && BBB.IsAlive(ss.m_Soldier))
 			{
 				AIControlComponent ai = AIControlComponent.Cast(ss.m_Soldier.FindComponent(AIControlComponent));
 				if (ai && !ai.IsAIActivated()) ai.ActivateAI();

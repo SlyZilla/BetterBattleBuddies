@@ -459,7 +459,7 @@ class BBB_StaticWeapons
 
 			// Condition C: Gunner left weapon on their own
 			CompartmentAccessComponent gAcc = job.m_Gunner.GetCompartmentAccessComponent();
-			if (!gAcc || gAcc.GetCompartment() != job.m_Slot)
+			if (!gAcc || (gAcc.GetCompartment() != job.m_Slot && !gAcc.IsGettingIn() && (nowMs - job.m_fCrewedSince > 4000)))
 			{
 				s_aJobs.RemoveOrdered(j);
 				continue;
@@ -474,7 +474,12 @@ class BBB_StaticWeapons
 			}
 
 			// Condition E: Explicit player/GM order on the gunner
-			SCR_AIUtilityComponent gUtil = SCR_AIUtilityComponent.Cast(job.m_Gunner.FindComponent(SCR_AIUtilityComponent));
+			AIControlComponent ai = AIControlComponent.Cast(job.m_Gunner.FindComponent(AIControlComponent));
+			SCR_AIUtilityComponent gUtil = null;
+			if (ai && ai.GetAIAgent())
+			{
+				gUtil = SCR_AIUtilityComponent.Cast(ai.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
+			}
 			if (gUtil && BBB_OrderIntent.Blocks(gUtil))
 			{
 				DismountGunner(job, "player/GM order");
