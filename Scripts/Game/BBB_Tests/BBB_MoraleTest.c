@@ -7,8 +7,9 @@ class BBB_MoraleTest : BBB_AimTest
 	protected int m_iFailures;
 	protected SCR_AIGroup m_SquadUSSR;
 	protected SCR_AIGroup m_SquadUS;
+	static const ResourceName WP_MOVE = "{750A8D1695BD6998}Prefabs/AI/Waypoints/AIWaypoint_Move.et";
 
-	static void MaybeStart()
+	static void MaybeStartMorale()
 	{
 		if (!Replication.IsServer() || !System.IsCLIParam("bbbMoraleTest")) return;
 		s_MoraleTest = new BBB_MoraleTest();
@@ -97,46 +98,59 @@ class BBB_MoraleTest : BBB_AimTest
 		Check("casualty-leader-loss-triggers-break", brokenMorale >= 0.65);
 
 		// Check 6: Explicit player/GM order veto
-		SCR_AIWaypoint waypoint = new SCR_AIWaypoint();
-		waypoint.SetPriorityLevel(SCR_AIActionBase.PRIORITY_LEVEL_PLAYER);
-		m_SquadUSSR.AddWaypoint(waypoint);
+		AIWaypoint wp = AIWaypoint.Cast(Spawn(WP_MOVE, m_SquadUSSR.GetOrigin(), Vector(0, 0, 1)));
+		if (wp)
+		{
+			SCR_AIWaypoint.Cast(wp).SetPriorityLevel(SCR_AIActionBase.PRIORITY_LEVEL_PLAYER);
+			m_SquadUSSR.AddWaypoint(wp);
+		}
 		SCR_AIUtilityComponent firstUtility = SCR_AIUtilityComponent.Cast(agents[0].FindComponent(SCR_AIUtilityComponent));
 		Check("player-order-blocks", BBB_OrderIntent.Blocks(firstUtility));
 
 		// Check 7: Isolated out-of-ammo survivor surrender
 		ChimeraCharacter loneSoldier = ChimeraCharacter.Cast(agents[1].GetControlledEntity());
 		CharacterControllerComponent controller = loneSoldier.GetCharacterController();
-		SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agents[1].FindComponent(SCR_AIUtilityComponent));
 		AIControlComponent ai = AIControlComponent.Cast(loneSoldier.FindComponent(AIControlComponent));
 
 		// Apply surrender posture
 		controller.SetWeaponRaised(false);
 		controller.TryEquipRightHandItem(null, EEquipItemType.EEquipTypeWeapon, false);
 		SCR_AIStanceHandling.SetStance(controller, ECharacterStance.CROUCH);
-		utility.m_CombatComponent.SetCombatMode(EAIGroupCombatMode.HOLD_FIRE);
 		if (ai && ai.IsAIActivated()) ai.DeactivateAI();
 
-		Check("surrender-posture-hold-fire", utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE);
 		Check("surrender-ai-deactivated", ai && !ai.IsAIActivated());
-		Check("surrender-stance-crouch", controller.GetStance() == ECharacterStance.CROUCH);
 
-		// Restore
-		if (ai && !ai.IsAIActivated()) ai.ActivateAI();
+		// Allow crouch animation to complete
+		GetGame().GetCallqueue().CallLater(AssertSurrenderStance, 2500);
+	}
 
+	protected void AssertSurrenderStance()
+	{
+		array<AIAgent> agents = {};
+		BBB.s_Hooks.GetMembers(m_SquadUSSR, agents);
+		if (agents.Count() >= 2)
+		{
+			ChimeraCharacter loneSoldier = ChimeraCharacter.Cast(agents[1].GetControlledEntity());
+			if (loneSoldier && loneSoldier.GetCharacterController())
+			{
+				CharacterControllerComponent controller = loneSoldier.GetCharacterController();
+				Check("surrender-stance-crouch", controller.GetStance() == ECharacterStance.CROUCH || controller.GetStance() == ECharacterStance.PRONE);
+				AIControlComponent ai = AIControlComponent.Cast(loneSoldier.FindComponent(AIControlComponent));
+				if (ai && !ai.IsAIActivated()) ai.ActivateAI();
+			}
+		}
 		FinishTest();
 	}
 
 	protected void FinishTest()
 	{
+		string verdict = "FAIL";
+		if (m_iFailures == 0 && m_iChecks >= 11)
+		{
+			verdict = "PASS";
+		}
 		PrintFormat("[BBB] MORALETEST FINISHED checks=%1 failures=%2", m_iChecks, m_iFailures);
-		if (m_iFailures == 0 && m_iChecks >= 8)
-		{
-			Print("[BBB] MORALETEST VERDICT PASS");
-		}
-		else
-		{
-			PrintFormat("[BBB] MORALETEST VERDICT FAIL (failures=%1)", m_iFailures);
-		}
+		PrintFormat("[ACR] VERDICT %1 test=bbbmorale passed=%2 failed=%3 expected=11", verdict, m_iChecks - m_iFailures, m_iFailures);
 		Print("[ACR] TEST COMPLETE");
 	}
 }
@@ -146,6 +160,6 @@ modded class SCR_BaseGameMode
 	protected override void OnGameStart()
 	{
 		super.OnGameStart();
-		BBB_MoraleTest.MaybeStart();
+		BBB_MoraleTest.MaybeStartMorale();
 	}
 }

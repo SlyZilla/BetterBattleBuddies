@@ -559,10 +559,7 @@ class BBB_Morale
 	{
 		if (!soldier || !utility || !controller) return;
 
-		// 1. Hold fire
-		utility.m_CombatComponent.SetCombatMode(EAIGroupCombatMode.HOLD_FIRE);
-
-		// 2. Cancel active combat movement
+		// 1. Cancel active combat movement
 		if (utility.m_CombatMoveState)
 		{
 			utility.m_CombatMoveState.CancelRequest();
