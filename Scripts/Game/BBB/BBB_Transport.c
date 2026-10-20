@@ -16,12 +16,30 @@ class BBB_Transport
   return slot.GetVehicle();
  }
 
+ // -bbbCommanderCrew 0: count turret-linked cargo seats as passenger seats again.
+ static bool s_bCommanderCrew = true;
+ protected static bool s_bCommanderRead;
+
+ // A cargo seat linked to a turret (AutoConnectToTurret), like the LAV-25 commander's.
+ static bool CommanderSeat(BaseCompartmentSlot slot)
+ {
+  return slot && slot.GetType() == ECompartmentType.CARGO && !slot.GetAutoConnectTurret().IsEmpty();
+ }
+
+ // A commander's seat reports TURRET: he is crew, not a passenger.
  static ECompartmentType SeatOf(IEntity body)
  {
   ChimeraCharacter character = ChimeraCharacter.Cast(body);
   if (!character || !character.GetCompartmentAccessComponent()) return ECompartmentType.CARGO;
   BaseCompartmentSlot slot = character.GetCompartmentAccessComponent().GetCompartment();
   if (!slot) return ECompartmentType.CARGO;
+  if (!s_bCommanderRead)
+  {
+   s_bCommanderRead = true;
+   string val;
+   if (System.GetCLIParam("bbbCommanderCrew", val) && val == "0") s_bCommanderCrew = false;
+  }
+  if (s_bCommanderCrew && CommanderSeat(slot)) return ECompartmentType.TURRET;
   return slot.GetType();
  }
 
