@@ -57,6 +57,7 @@ bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
 
 The source checkout also includes experimental options, off by default:
 
+- `-bbbStaticWeapons 1`: autonomous infantry squads in contact detect nearby operational, loaded friendly static weapons or defensible turrets (<= 35 m) facing perceived enemy threats (traverse arc <= 60 deg). Assigns a fit foot soldier to crew the weapon, and automatically releases and dismounts when ordered on, the squad moves away, the area clears for 15 s, ammunition is exhausted, or the weapon is destroyed. Respects player/GM orders and player control.
 - `-bbbSmoke 1`: autonomous infantry squads deploy smoke grenades to screen casualty drags (`BBB_Drag`), bounding maneuver advances (`BBB_FireManeuver`), and retrograde break-contact withdrawals (`BBB_Morale`) directly toward perceived enemy threat sectors. Features spherical line-of-sight occlusion tracking (`BBB_Smoke.IsOccluded`), squad cooldowns, and strict safety guards respecting player control and orders.
 - `-bbbMorale 1`: autonomous infantry squads evaluate morale under heavy attrition (casualty ratio >= 50%, leader loss, sustained suppression). When morale breaks under contact, the squad conducts a retrograde bounding peel-back away from the threat centroid into rear cover until contact is broken. Isolated, out-of-ammo survivors cornered within 15 m enter a surrender posture rather than charging. Use `0` to disable; respects player/GM orders and host hooks.
 
