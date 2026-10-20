@@ -37,6 +37,8 @@ class BBB_Hooks : Managed
  bool AllowStaticWeapons(SCR_AIGroup group) { return true; }
  // Host tactical doctrines may veto offensive hand grenade employment.
  bool AllowGrenades(SCR_AIGroup group) { return true; }
+ bool AllowBuildings(SCR_AIGroup group) { return true; }
+ bool AllowArmorReaction(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Something dropped on the ground that the host may clean up later.
@@ -64,6 +66,8 @@ class BBB
 		BBB_Smoke.Read();
 		BBB_StaticWeapons.Read();
 		BBB_Grenades.Read();
+  BBB_Buildings.Read();
+  BBB_ArmorReaction.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -89,6 +93,8 @@ class BBB
   BBB_Smoke.Stop();
   BBB_StaticWeapons.Stop();
   BBB_Grenades.Stop();
+  BBB_Buildings.Stop();
+  BBB_ArmorReaction.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -129,6 +135,10 @@ class BBB
 		t = BBB_Perf.Lap("tick.staticWeapons", t);
 		BBB_Grenades.Tick();
 		t = BBB_Perf.Lap("tick.grenades", t);
+  BBB_Buildings.Tick();
+  t = BBB_Perf.Lap("tick.buildings", t);
+  BBB_ArmorReaction.Tick();
+  t = BBB_Perf.Lap("tick.armorReaction", t);
 		BBB_Perf.OnTick();
  }
 
@@ -143,6 +153,9 @@ class BBB
   s_iFrames++;
   BBB_Perf.OnFrame();
   BBB_Unstick.FrameAll();
+  int armorStarted = System.GetTickCount();
+  BBB_ArmorReaction.Frame();
+  BBB_Perf.Add("frame.armorReaction", System.GetTickCount() - armorStarted);
  }
 
  // ---------------------------------------------------------------- helpers

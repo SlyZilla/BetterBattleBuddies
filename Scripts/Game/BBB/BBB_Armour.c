@@ -544,6 +544,7 @@ modded class SCR_DamageManagerComponent
   {
    if (BBB_Armour.s_Watch) BBB_Armour.Watch(GetOwner(), damageContext);
    BBB_Armour.OnVehicleHit(GetOwner(), damageContext);
+   BBB_ArmorReaction.Hit(GetOwner(), damageContext);
    if (damageContext.damageType == EDamageType.KINETIC && damageContext.damageSource)
     BBB_Transport.OnVehicleHit(GetOwner());
   }

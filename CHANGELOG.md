@@ -2,6 +2,8 @@
 
 ## 0.1.5 — unreleased
 
+- Added optional vehicle defence against launcher fire (`-bbbArmorReaction 1`): supported fitted smoke weapons fire and slow wheeled vehicles can make a short, guarded reverse maneuver. Player driving and movement orders take priority.
+- Added optional building garrison and clearing (`-bbbBuildings 1`): infantry use native indoor cover near detected enemies, hold their positions and investigate further indoor cover when contacts are inside. Failed routes are abandoned; player orders take priority.
 - Fixed medic smoke: medics and teammates now actually throw the smoke cover added in 0.1.2 (the throw was silently skipped before).
 - Added optional autonomous hand grenade employment (`-bbbGrenades 1`): infantry squads engaging perceived enemies in cover or defilade within throwing range (10-35 m) evaluate tactical grenade opportunities. Verifies fragmentation grenade availability, friendly blast safety clearance (>= 14 m), clear throwing corridor (2.5 m), and trajectory clearance without point-blank obstructions, enforcing a 25 s squad cooldown.
 - Added optional autonomous static weapon crewing (`-bbbStaticWeapons 1`): idle or defending autonomous squads in contact locate nearby operational, loaded friendly static weapons or defensible turrets (<= 35 m) with threats in their traverse arc (default <= 60 deg). The nearest fit squadmate walks over and climbs in (no teleporting); he gives the gun up for player and Game Master orders and host-mod rules, and automatically releases and dismounts when ordered on, tether distance is exceeded, targets are cleared for 15 s, ammunition is exhausted, or the weapon is destroyed.
