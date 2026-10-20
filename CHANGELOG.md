@@ -2,6 +2,7 @@
 
 ## 0.1.5 — unreleased
 
+- Added optional tactical smoke screening (`-bbbSmoke 1`): AI squads autonomously deploy smoke grenades to screen casualty drags (`BBB_Drag`), bounding maneuver advances (`BBB_FireManeuver`), and retrograde break-contact bounds (`BBB_Morale`) directly toward perceived enemy threat sectors. Features spherical line-of-sight occlusion tracking (`BBB_Smoke.IsOccluded`), squad cooldowns, and strict safety guards respecting player control and orders.
 - Added optional squad morale, retrograde break-contact withdrawal and surrender (`-bbbMorale 1`): autonomous infantry squads suffering heavy casualties (>= 50%), squad leader loss or heavy suppression conduct covered peel-back bounds to disengage from active contacts; isolated, out-of-ammo soldiers cornered by close enemies (<= 15 m) surrender instead of charging blindly.
 
 ## 0.1.4 — released

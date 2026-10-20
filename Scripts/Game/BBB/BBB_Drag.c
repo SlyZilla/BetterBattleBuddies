@@ -381,6 +381,7 @@ class BBB_Drag
   string how = "drags";
   if (carry) how = "carries";
   PrintFormat("[BBB] DRAG %1 %2 %3 %4 m to cover", BBB_Medic.Name(healer), how, BBB_Medic.Name(casualty), Math.Round(distance));
+  BBB_Smoke.DeployForDrag(healer, casualty, spot);
   StartTicking();
  }
 

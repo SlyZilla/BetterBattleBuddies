@@ -31,6 +31,8 @@ class BBB_Hooks : Managed
  bool AllowRelaxedMarch(SCR_AIGroup group) { return true; }
  // Host orders or commander retreats may handle morale for this group.
  bool AllowMorale(SCR_AIGroup group) { return true; }
+ // Host tactical doctrines may veto autonomous tactical smoke.
+ bool AllowSmoke(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Something dropped on the ground that the host may clean up later.
@@ -55,6 +57,7 @@ class BBB
 		BBB_Perf.Read();
 		BBB_Rearm.Read();
 		BBB_Morale.Read();
+		BBB_Smoke.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -77,6 +80,7 @@ class BBB
   BBB_Armour.Stop();
   BBB_Rearm.Stop();
   BBB_Morale.Stop();
+  BBB_Smoke.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -111,6 +115,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.horizonScan", t);
 		BBB_Morale.Tick();
 		t = BBB_Perf.Lap("tick.morale", t);
+		BBB_Smoke.Tick();
+		t = BBB_Perf.Lap("tick.smoke", t);
 		BBB_Perf.OnTick();
  }
 

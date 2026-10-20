@@ -451,6 +451,9 @@ class BBB_Morale
 			coverer.m_CombatMoveState.ApplyNewRequest(stopReq);
 		}
 
+		// Tactical smoke deployment to screen retrograde withdrawal
+		BBB_Smoke.DeployForRetrograde(state.m_Group, state.m_vThreatCenter, state.m_TeamCover);
+
 		s_iWithdrawalBounds++;
 	}
 

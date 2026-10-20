@@ -215,6 +215,7 @@ class BBB_Medic
 
  static bool IsOccludedBySmoke(vector from, vector to)
  {
+  if (BBB_Smoke.s_bOn && BBB_Smoke.IsOccludedSelf(from, to)) return true;
   if (!s_bSmokeOn) return false;
   float now = NowMs();
   for (int i = s_mSmokeTime.Count() - 1; i >= 0; i--)

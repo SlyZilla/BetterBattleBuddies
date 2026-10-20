@@ -562,6 +562,15 @@ class BBB_FireManeuver
   utility.m_bBBBFireDestination = true;
   if (physicalCover) BBB_Perf.Count("fireManeuver.coverMoves");
   PrintFormat("[BBB] FIRE BOUND team=%1 phase=%2 destination=%3 cover=%4", utility.m_iBBBFireTeam, utility.m_iBBBFirePhase, position, physicalCover);
+  if (utility.m_BBBFireJob)
+  {
+   array<SCR_AIUtilityComponent> coveringMembers = {};
+   foreach (SCR_AIUtilityComponent m : utility.m_BBBFireJob.m_Members)
+   {
+    if (m && m.m_iBBBFireTeam == utility.m_BBBFireJob.m_iCoverTeam) coveringMembers.Insert(m);
+   }
+   BBB_Smoke.DeployForBound(utility.m_BBBFireJob.m_Group, position, utility.m_BBBFireJob.m_Threat, coveringMembers);
+  }
  }
  protected static void Arrived(SCR_AIUtilityComponent utility, SCR_AICombatMoveRequestBase request)
  {
