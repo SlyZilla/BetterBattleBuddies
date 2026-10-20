@@ -1,0 +1,7 @@
+MetaFileClass {
+ Name "{BBB0A11900000003}Prefabs/BBB_Tests/BBB_AlignmentRoof.et"
+ Configurations {
+  ENTResourceClass PC {}
+  ENTResourceClass HEADLESS : PC {}
+ }
+}

@@ -2,6 +2,8 @@
 
 ## 0.1.5 — unreleased
 
+- Added optional armored-crew turnout (`-bbbCrewTurnout 1`): supported AI crew positions turn out after a quiet period, then button up when threats, incoming fire or vehicle hits return.
+- Added optional limited-turret driver alignment (`-bbbDriverAlign 1`): idle AI drivers can make a small adjustment on clear, level ground for their gunner's visible, viable target. Movement orders, player control and unsafe positions prevent the adjustment.
 - Added optional vehicle defence against launcher fire (`-bbbArmorReaction 1`): supported fitted smoke weapons fire and slow wheeled vehicles can make a short, guarded reverse maneuver. Player driving and movement orders take priority.
 - Added optional building garrison and clearing (`-bbbBuildings 1`): infantry use native indoor cover near detected enemies, hold their positions and investigate further indoor cover when contacts are inside. Failed routes are abandoned; player orders take priority.
 - Fixed medic smoke: medics and teammates now actually throw the smoke cover added in 0.1.2 (the throw was silently skipped before).

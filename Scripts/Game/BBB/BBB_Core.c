@@ -80,6 +80,8 @@ class BBB
  static void Stop()
  {
   if (GetGame()) GetGame().GetCallqueue().Remove(Tick);
+  BBB_DriverAlignment.Stop();
+  BBB_CrewTurnout.Stop();
   BBB_Unstick.StopAll();
   BBB_FireManeuver.Stop();
   BBB_Drag.Stop();
@@ -107,6 +109,10 @@ class BBB
  static void Tick()
  {
   int t = System.GetTickCount();
+  BBB_CrewTurnout.Tick();
+  t = BBB_Perf.Lap("tick.crewTurnout", t);
+  BBB_DriverAlignment.Tick();
+  t = BBB_Perf.Lap("tick.driverAlign", t);
   if (s_VehicleHelpers) s_VehicleHelpers.Tick();
   t = BBB_Perf.Lap("tick.vehicleHelpers", t);
 		if (s_Launchers) s_Launchers.Tick();
@@ -156,6 +162,7 @@ class BBB
   int armorStarted = System.GetTickCount();
   BBB_ArmorReaction.Frame();
   BBB_Perf.Add("frame.armorReaction", System.GetTickCount() - armorStarted);
+  BBB_DriverAlignment.Frame();
  }
 
  // ---------------------------------------------------------------- helpers

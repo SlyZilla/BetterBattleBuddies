@@ -1,0 +1,7 @@
+MetaFileClass {
+ Name "{BBB0A11900000001}Prefabs/BBB_Tests/BBB_AlignmentTurret.et"
+ Configurations {
+  ENTResourceClass PC {}
+  ENTResourceClass HEADLESS : PC {}
+ }
+}

@@ -1,0 +1,12 @@
+GenericEntity : "{1B8A9F09C98A981B}Prefabs/Vehicles/Wheeled/M998/VehParts/M1025_roof_M2HB.et" {
+ ID "BBB0A11900000013"
+ components {
+  SlotManagerComponent "{54F2B37F3202E099}" {
+   Slots {
+    RegisteringComponentSlotInfo Turret {
+     Prefab "{BBB0A11900000001}Prefabs/BBB_Tests/BBB_AlignmentTurret.et"
+    }
+   }
+  }
+ }
+}

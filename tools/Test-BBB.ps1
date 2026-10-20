@@ -1,9 +1,10 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
- [string]$ServerPath
+ [string]$ServerPath,
+ [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120
 )
 $ErrorActionPreference = 'Stop'
 if (!$AddonRoot) { $AddonRoot = Split-Path $PSScriptRoot -Parent }
@@ -11,7 +12,7 @@ $AddonRoot = [IO.Path]::GetFullPath($AddonRoot)
 $project = Join-Path $AddonRoot 'addon.gproj'
 if (!(Test-Path -LiteralPath $project) -or (Get-Content -LiteralPath $project -Raw) -notmatch 'GUID "BBB0261015000001"') { throw 'Not a BBB addon root.' }
 $serverWait = 0
-while ((Get-Process ArmaReforgerServer -ErrorAction SilentlyContinue) -and $serverWait -lt 1200) {
+while ((Get-Process ArmaReforgerServer -ErrorAction SilentlyContinue) -and $serverWait -lt ($WaitForServerSeconds * 2.5)) {
  Start-Sleep -Milliseconds 400
  $serverWait++
 }
@@ -39,6 +40,20 @@ $resultDir = Join-Path $root '.bbb-results'
 New-Item -ItemType Directory -Path $profile,$resultDir -Force | Out-Null
 $flags = @{ vanilla = '-bbbVanillaTest 1'; rearm = '-bbbRearmTest 1'; seatdiag = '-bbbSeatDiag 1 -bbbTurretTrace 1'; seatfire = '-bbbSeatDiag 1 -bbbTurretTrace 1 -bbbSeatDiagFireOnly 1'; seatidle = '-bbbSeatDiag 1 -bbbTurretTrace 1 -bbbSeatDiagIdleOnly 1'; look = '-acrBbbLookTest 1'; firemaneuverperf = '-acrBbbFireManeuverPerfTest 1'; morale = '-bbbMoraleTest 1 -bbbPerf 1'; smoke = '-bbbSmokeTest 1 -bbbPerf 1'; staticweapons = '-bbbStaticWeaponsTest 1 -bbbPerf 1'; grenades = '-bbbGrenadeTest 1 -bbbPerf 1'; featureaudit = '-bbbFeatureAuditTest 1 -bbbPerf 1'; reactions = '-bbbReactionTest 1 -bbbPerf 1'; compile = '' }
 $timeouts = @{ vanilla = 100; rearm = 65; seatdiag = 330; seatfire = 150; seatidle = 150; look = 90; firemaneuverperf = 160; morale = 120; smoke = 120; staticweapons = 120; grenades = 120; featureaudit = 200; reactions = 160; compile = 45 }
+$sourceSnapshot = Join-Path $resultDir ($id + '.source.json')
+$sourceFiles = @('Scripts','Configs/BBB','Prefabs/BBB_Tests') | ForEach-Object {
+ $sourcePath = Join-Path $AddonRoot $_
+ if (Test-Path -LiteralPath $sourcePath) { Get-ChildItem -LiteralPath $sourcePath -File -Recurse }
+}
+@($sourceFiles | Sort-Object FullName | ForEach-Object {
+ [PSCustomObject]@{ path = $_.FullName.Substring($AddonRoot.Length + 1); sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+}) | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $sourceSnapshot -Encoding UTF8
+$flags.crewturnout = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase turnout -bbbPerf 1'
+$flags.driveralign = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase alignment -bbbPerf 1'
+$timeouts.crewturnout = 120
+$timeouts.driveralign = 110
+$flags.driveraligncomplete = '-bbbVehiclePostureTest 1 -bbbVehiclePostureCase alignmentcomplete -bbbPerf 1'
+$timeouts.driveraligncomplete = 110
 $world = '{AC230926A00100E0}Worlds/BBB_TestArland.ent'
 if ($Preset -eq 'compile') { $world = '{77C41EA429B6AC35}worlds/GameMaster/GM_Arland.ent' }
 $argsLine = '-server "' + $world + '" -addonsDir "' + (Split-Path $AddonRoot -Parent) + '" -addons BBB0261015000001 -profile "' + $profile + '" -maxFPS 60 -noBackend ' + $flags[$Preset]
@@ -68,7 +83,9 @@ try {
 }
 $result = Join-Path $resultDir ($id + '.result.txt')
 $sha = 'uncommitted extraction'
-if (Test-Path -LiteralPath (Join-Path $root '.git/refs/heads/main')) { $sha = & git -C $root rev-parse HEAD }
-@("status=$status", "preset=$Preset", "source=$sha", "addonRoot=$AddonRoot", "args=$argsLine", "log=$log", $body) | Set-Content -LiteralPath $result -Encoding UTF8
+$sourceHead = & git -C $root rev-parse --verify HEAD
+if ($LASTEXITCODE -eq 0) { $sha = $sourceHead.Trim() }
+if (& git -C $root status --porcelain -- Scripts Configs Prefabs) { $sha += '+dirty' }
+@("status=$status", "preset=$Preset", "source=$sha", "addonRoot=$AddonRoot", "sourceManifest=$sourceSnapshot", "args=$argsLine", "log=$log", $body) | Set-Content -LiteralPath $result -Encoding UTF8
 Write-Output "BBB $Preset : $status; result=$result"
 if ($status -ne 'completed') { exit 1 }
