@@ -358,7 +358,10 @@ class BBB_Medic
 
   if (!thrower) return false;
 
-  SCR_AIUtilityComponent throwerUtil = SCR_AIUtilityComponent.Cast(thrower.FindComponent(SCR_AIUtilityComponent));
+  // The AI utility lives on the soldier's AI agent, not on his body.
+  AIControlComponent throwerControl = AIControlComponent.Cast(thrower.FindComponent(AIControlComponent));
+  if (!throwerControl || !throwerControl.GetControlAIAgent()) return false;
+  SCR_AIUtilityComponent throwerUtil = SCR_AIUtilityComponent.Cast(throwerControl.GetControlAIAgent().FindComponent(SCR_AIUtilityComponent));
   if (!throwerUtil) return false;
 
   SCR_AIThrowGrenadeToBehavior behavior = new SCR_AIThrowGrenadeToBehavior(

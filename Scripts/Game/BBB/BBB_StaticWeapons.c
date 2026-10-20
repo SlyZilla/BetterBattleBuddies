@@ -9,13 +9,16 @@
 //    within viable engagement range (5 to 500 m). Weapons facing away from threats
 //    are ignored.
 // 3. Crew assignment: assigns the closest fit squadmate on foot (preferring non-leaders),
-//    boarding via native compartment actions and activating AI gunner control.
+//    who walks to the weapon with vanilla's own get-in behaviour (no teleport). The job
+//    stays pending until he is actually seated; a boarding that fails, times out (30 s)
+//    or is overtaken by orders is cancelled and the seat reservation freed.
 // 4. Release when ordered on: the gunner dismounts and rejoins the squad on foot when
 //    the squad receives an explicit move order (BBB_OrderIntent.Blocks), moves away
 //    (> 45 m tether), the target sector stays quiet for a sustained period (15 s),
 //    ammunition is exhausted, or the weapon is destroyed.
-// 5. Constraints: never overrides player/GM orders, player control, or host vehicle
-//    hooks; never mounts enemy-faction weapons; budget <= 0.1 ms/tick.
+// 5. Constraints: never overrides player/GM orders or player control; respects the host
+//    hooks AllowStaticWeapons(group) and LeaveAlone(weapon); never mounts enemy-faction
+//    weapons; never switches on AI that something else switched off; budget <= 0.1 ms/tick.
 
 class BBB_StaticGunnerJob : Managed
 {
@@ -23,9 +26,12 @@ class BBB_StaticGunnerJob : Managed
 	ChimeraCharacter m_Gunner;
 	IEntity m_StaticWeapon;
 	BaseCompartmentSlot m_Slot;
+	SCR_AIUtilityComponent m_Utility;
+	SCR_AIGetInVehicle m_GetIn;      // native get-in behaviour (owned by the utility)
+	float m_fRequestedMs;
 	float m_fCrewedSince;
 	float m_fLastThreatInArcMs;
-	bool m_bMounted;
+	bool m_bMounted;                 // false while walking to / climbing into the seat
 }
 
 class BBB_StaticWeapons
@@ -41,6 +47,8 @@ class BBB_StaticWeapons
 	static const float MAX_TETHER_DIST_M = 45.0;
 	static const float MAX_ENGAGE_DIST_M = 500.0;
 	static const float MIN_ENGAGE_DIST_M = 5.0;
+	static const float BOARDING_TIMEOUT_MS = 30000.0;
+	static const float WEAPON_RETRY_MS = 60000.0;
 
 	// Active crewed jobs
 	protected static ref array<ref BBB_StaticGunnerJob> s_aJobs = new array<ref BBB_StaticGunnerJob>();
@@ -48,10 +56,15 @@ class BBB_StaticWeapons
 	// Per-group evaluation throttle: Group -> next allowed check time in ms
 	protected static ref map<SCR_AIGroup, float> s_mNextCheck = new map<SCR_AIGroup, float>();
 
+	// Weapon -> earliest time it may be crewed again after a release or failed boarding
+	protected static ref map<IEntity, float> s_mWeaponRetry = new map<IEntity, float>();
+
 	// Scratch query buffer
 	protected static ref array<IEntity> s_aQueriedEntities = new array<IEntity>();
 
 	// Performance and test counters
+	static int s_iBoardingRequests;
+	static int s_iBoardingsCancelled;
 	static int s_iWeaponsCrewed;
 	static int s_iWeaponsReleased;
 	static int s_iScanTicks;
@@ -97,11 +110,16 @@ class BBB_StaticWeapons
 		for (int i = s_aJobs.Count() - 1; i >= 0; i--)
 		{
 			BBB_StaticGunnerJob job = s_aJobs[i];
-			if (job) DismountGunner(job, "BBB stopped");
+			if (!job) continue;
+			if (job.m_bMounted) DismountGunner(job, "BBB stopped");
+			else CancelBoarding(job, "BBB stopped");
 		}
 		s_aJobs.Clear();
 		s_mNextCheck.Clear();
+		s_mWeaponRetry.Clear();
 		s_aQueriedEntities.Clear();
+		s_iBoardingRequests = 0;
+		s_iBoardingsCancelled = 0;
 		s_iWeaponsCrewed = 0;
 		s_iWeaponsReleased = 0;
 		s_iScanTicks = 0;
@@ -353,13 +371,45 @@ class BBB_StaticWeapons
 
 	// ---------------------------------------------------------------- mounting & dismounting
 
-	// Board static weapon
+	// Resolve a soldier's AI utility. It lives on the AI agent, not on the body.
+	static SCR_AIUtilityComponent UtilityOf(IEntity soldier)
+	{
+		if (!soldier) return null;
+		AIControlComponent control = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
+		if (!control || !control.GetControlAIAgent()) return null;
+		return SCR_AIUtilityComponent.Cast(control.GetControlAIAgent().FindComponent(SCR_AIUtilityComponent));
+	}
+
+	// True while a job (pending or mounted) already claims this weapon
+	static bool IsClaimed(IEntity weapon)
+	{
+		foreach (BBB_StaticGunnerJob job : s_aJobs)
+		{
+			if (job && job.m_StaticWeapon == weapon) return true;
+		}
+		return false;
+	}
+
+	// Send the soldier to the weapon on foot with vanilla's own get-in behaviour
+	// (the same one vanilla gunners use to return to a turret). Nothing teleports:
+	// the job stays pending until he is actually seated.
 	static bool CrewWeapon(SCR_AIGroup group, ChimeraCharacter gunner, IEntity weapon, BaseCompartmentSlot slot)
 	{
 		if (!group || !gunner || !weapon || !slot) return false;
+		if (!BBB.s_Hooks.AllowStaticWeapons(group) || BBB.s_Hooks.LeaveAlone(weapon)) return false;
+		if (IsClaimed(weapon)) return false;
+		if (slot.IsReserved() && !slot.IsReservedBy(gunner)) return false;
 
-		// Eject incapacitated occupant if present
 		IEntity occ = slot.GetOccupant();
+		if (occ && occ != gunner && BBB_VehicleHelpers.IsAble(occ)) return false;
+
+		SCR_AIUtilityComponent utility = UtilityOf(gunner);
+		if (!utility || BBB_OrderIntent.Blocks(utility)) return false;
+
+		IEntity vehicle = slot.GetVehicle();
+		if (!vehicle) vehicle = weapon;
+
+		// Remove an incapacitated occupant so the seat is free when he arrives
 		if (occ && occ != gunner)
 		{
 			ChimeraCharacter occCh = ChimeraCharacter.Cast(occ);
@@ -370,47 +420,95 @@ class BBB_StaticWeapons
 			}
 		}
 
-		CompartmentAccessComponent acc = gunner.GetCompartmentAccessComponent();
-		if (!acc) return false;
-
-		bool ok = acc.GetInVehicle(weapon, slot, true, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
-		if (!ok) return false;
-
-		// Activate AI
-		AIControlComponent ai = AIControlComponent.Cast(gunner.FindComponent(AIControlComponent));
-		if (ai && !ai.IsAIActivated()) ai.ActivateAI();
+		slot.SetReserved(gunner);
+		SCR_AIGetInVehicle getIn = new SCR_AIGetInVehicle(utility, null, vehicle, slot, EAICompartmentType.Turret,
+			SCR_AIActionBase.PRIORITY_BEHAVIOR_GET_IN_VEHICLE, SCR_AIActionBase.PRIORITY_LEVEL_NORMAL);
+		utility.AddAction(getIn);
 
 		BBB_StaticGunnerJob job = new BBB_StaticGunnerJob();
 		job.m_Group = group;
 		job.m_Gunner = gunner;
 		job.m_StaticWeapon = weapon;
 		job.m_Slot = slot;
+		job.m_Utility = utility;
+		job.m_GetIn = getIn;
 		float now = GetGame().GetWorld().GetWorldTime();
+		job.m_fRequestedMs = now;
 		job.m_fCrewedSince = now;
 		job.m_fLastThreatInArcMs = now;
-		job.m_bMounted = true;
+		job.m_bMounted = false;
 		s_aJobs.Insert(job);
 
-		s_iWeaponsCrewed++;
-		PrintFormat("[BBB] STATIC: %1 (%2) crewing static weapon %3",
-			gunner, BBB.s_Hooks.NameOf(group), weapon);
+		s_iBoardingRequests++;
+		PrintFormat("[BBB] STATIC: %1 (%2) heading for static weapon %3 (%4 m)",
+			gunner, BBB.s_Hooks.NameOf(group), weapon, Math.Round(vector.Distance(gunner.GetOrigin(), weapon.GetOrigin())));
 		return true;
 	}
 
-	// Dismount static weapon and release gunner back to squad
+	// Stop a boarding that has not finished: cancel the native get-in and free the seat
+	protected static void CancelBoarding(BBB_StaticGunnerJob job, string reason)
+	{
+		if (!job) return;
+		if (job.m_GetIn)
+		{
+			EAIActionState state = job.m_GetIn.GetActionState();
+			if (state != EAIActionState.COMPLETED && state != EAIActionState.FAILED) job.m_GetIn.Fail();
+		}
+		if (job.m_Slot && job.m_Gunner && job.m_Slot.IsReservedBy(job.m_Gunner)) job.m_Slot.SetReserved(null);
+
+		// A boarding that got as far as the seat is a release, not a cancel
+		if (job.m_Gunner && job.m_Slot && job.m_Slot.GetOccupant() == job.m_Gunner)
+		{
+			DismountGunner(job, reason);
+			return;
+		}
+		s_iBoardingsCancelled++;
+		if (job.m_StaticWeapon) s_mWeaponRetry.Set(job.m_StaticWeapon, GetGame().GetWorld().GetWorldTime() + WEAPON_RETRY_MS);
+		PrintFormat("[BBB] STATIC: %1 boarding of %2 cancelled (reason=%3)", job.m_Gunner, job.m_StaticWeapon, reason);
+	}
+
+	// Release a seated gunner back to his squad with vanilla's get-out behaviour.
+	// A player who has taken him over is left alone.
 	protected static void DismountGunner(BBB_StaticGunnerJob job, string reason)
 	{
 		if (!job || !job.m_Gunner) return;
+		s_iWeaponsReleased++;
+		if (job.m_StaticWeapon) s_mWeaponRetry.Set(job.m_StaticWeapon, GetGame().GetWorld().GetWorldTime() + WEAPON_RETRY_MS);
 
 		CompartmentAccessComponent acc = job.m_Gunner.GetCompartmentAccessComponent();
-		if (acc && job.m_Slot && acc.GetCompartment() == job.m_Slot)
+		bool seated = acc && job.m_Slot && acc.GetCompartment() == job.m_Slot;
+		if (seated && BBB.IsAlive(job.m_Gunner) && !BBB.PlayerOf(job.m_Gunner))
 		{
-			acc.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+			SCR_AIUtilityComponent utility = UtilityOf(job.m_Gunner);
+			IEntity vehicle = job.m_Slot.GetVehicle();
+			if (!vehicle) vehicle = job.m_StaticWeapon;
+			if (utility && !utility.FindActionOfType(SCR_AIGetOutVehicle))
+			{
+				utility.AddAction(new SCR_AIGetOutVehicle(utility, null, vehicle, 0,
+					SCR_AIActionBase.PRIORITY_BEHAVIOR_GET_OUT_VEHICLE_HIGH_PRIORITY, SCR_AIActionBase.PRIORITY_LEVEL_NORMAL));
+			}
+			else if (!utility)
+			{
+				acc.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+			}
+			// Backstop in case the native get-out cannot run
+			GetGame().GetCallqueue().CallLater(ForceOutIfStillSeated, 8000, false, job.m_Gunner, job.m_Slot);
 		}
 
-		s_iWeaponsReleased++;
 		PrintFormat("[BBB] STATIC: %1 released static weapon %2 (reason=%3)",
 			job.m_Gunner, job.m_StaticWeapon, reason);
+	}
+
+	protected static void ForceOutIfStillSeated(ChimeraCharacter gunner, BaseCompartmentSlot slot)
+	{
+		if (!gunner || !slot || !BBB.IsAlive(gunner) || BBB.PlayerOf(gunner)) return;
+		if (slot.GetOccupant() != gunner) return;
+		foreach (BBB_StaticGunnerJob job : s_aJobs)
+		{
+			if (job && job.m_Gunner == gunner) return; // crewed again since
+		}
+		CompartmentAccessComponent acc = gunner.GetCompartmentAccessComponent();
+		if (acc && !acc.IsGettingOut()) acc.GetOutVehicle(EGetOutType.TELEPORT, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
 	}
 
 	// ---------------------------------------------------------------- sphere query filter
@@ -418,11 +516,35 @@ class BBB_StaticWeapons
 	protected static bool CollectStaticWeapon(IEntity entity)
 	{
 		if (!entity || BBB.Health(entity) <= 0) return true;
+		if (!entity.FindComponent(SCR_BaseCompartmentManagerComponent)) return true;
 		s_aQueriedEntities.Insert(entity);
 		return true;
 	}
 
 	// ---------------------------------------------------------------- main tick
+
+	// Why a job must end now, or "" to keep it
+	protected static string ReleaseReason(BBB_StaticGunnerJob job, float nowMs)
+	{
+		if (!job.m_StaticWeapon || BBB.Health(job.m_StaticWeapon) <= 0) return "weapon destroyed";
+		if (BBB.PlayerOf(job.m_Gunner)) return "player took over";
+		if (!job.m_Group || BBB.HasPlayer(job.m_Group)) return "player squad";
+		if (!BBB.s_Hooks.AllowStaticWeapons(job.m_Group) || BBB.s_Hooks.LeaveAlone(job.m_StaticWeapon)) return "host policy";
+
+		SCR_AIUtilityComponent utility = UtilityOf(job.m_Gunner);
+		if (utility && BBB_OrderIntent.Blocks(utility)) return "player/GM order";
+
+		IEntity anchor = BBB.AnchorOf(job.m_Group);
+		if (anchor && anchor != job.m_Gunner && vector.DistanceXZ(anchor.GetOrigin(), job.m_StaticWeapon.GetOrigin()) > MAX_TETHER_DIST_M) return "squad moved on";
+
+		if (!job.m_bMounted) return "";
+
+		if (!BBB_VehicleHelpers.TurretHasAmmo(job.m_Slot)) return "out of ammo";
+
+		if (HasThreatInArc(job.m_Group, job.m_StaticWeapon, s_fMaxArcDeg)) job.m_fLastThreatInArcMs = nowMs;
+		else if (nowMs - job.m_fLastThreatInArcMs >= s_fQuietTimeoutS * 1000.0) return "quiet timeout / target cleared";
+		return "";
+	}
 
 	static void Tick()
 	{
@@ -432,7 +554,7 @@ class BBB_StaticWeapons
 		float nowMs = GetGame().GetWorld().GetWorldTime();
 		s_iScanTicks++;
 
-		// 1. Maintain and release active jobs
+		// 1. Maintain pending boardings and crewed weapons
 		for (int j = s_aJobs.Count() - 1; j >= 0; j--)
 		{
 			BBB_StaticGunnerJob job = s_aJobs[j];
@@ -442,74 +564,74 @@ class BBB_StaticWeapons
 				continue;
 			}
 
-			// Condition A: Gunner dead or incapacitated
-			if (!job.m_Gunner || !BBB.IsAlive(job.m_Gunner))
+			// Dead or incapacitated: nothing to hand back, just free the seat
+			if (!job.m_Gunner || !BBB.IsAlive(job.m_Gunner) || !BBB_VehicleHelpers.IsAble(job.m_Gunner))
 			{
+				if (job.m_Slot && job.m_Gunner && job.m_Slot.IsReservedBy(job.m_Gunner)) job.m_Slot.SetReserved(null);
 				s_aJobs.RemoveOrdered(j);
 				continue;
 			}
 
-			// Condition B: Static weapon destroyed
-			if (!job.m_StaticWeapon || BBB.Health(job.m_StaticWeapon) <= 0)
-			{
-				DismountGunner(job, "weapon destroyed");
-				s_aJobs.RemoveOrdered(j);
-				continue;
-			}
-
-			// Condition C: Gunner left weapon on their own
 			CompartmentAccessComponent gAcc = job.m_Gunner.GetCompartmentAccessComponent();
-			if (!gAcc || (gAcc.GetCompartment() != job.m_Slot && !gAcc.IsGettingIn() && (nowMs - job.m_fCrewedSince > 4000)))
-			{
-				s_aJobs.RemoveOrdered(j);
-				continue;
-			}
+			bool seated = gAcc && job.m_Slot && gAcc.GetCompartment() == job.m_Slot;
 
-			// Condition D: Weapon out of ammunition
-			if (!BBB_VehicleHelpers.TurretHasAmmo(job.m_Slot))
+			if (!job.m_bMounted)
 			{
-				DismountGunner(job, "out of ammo");
-				s_aJobs.RemoveOrdered(j);
-				continue;
-			}
-
-			// Condition E: Explicit player/GM order on the gunner
-			AIControlComponent ai = AIControlComponent.Cast(job.m_Gunner.FindComponent(AIControlComponent));
-			SCR_AIUtilityComponent gUtil = null;
-			if (ai && ai.GetAIAgent())
-			{
-				gUtil = SCR_AIUtilityComponent.Cast(ai.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
-			}
-			if (gUtil && BBB_OrderIntent.Blocks(gUtil))
-			{
-				DismountGunner(job, "player/GM order");
-				s_aJobs.RemoveOrdered(j);
-				continue;
-			}
-
-			// Condition F: Squad tether distance exceeded (squad moved away)
-			IEntity anchor = BBB.AnchorOf(job.m_Group);
-			if (anchor && vector.DistanceXZ(anchor.GetOrigin(), job.m_StaticWeapon.GetOrigin()) > MAX_TETHER_DIST_M)
-			{
-				DismountGunner(job, "squad moved on");
-				s_aJobs.RemoveOrdered(j);
-				continue;
-			}
-
-			// Condition G: Threat in arc evaluation & quiet timeout
-			if (HasThreatInArc(job.m_Group, job.m_StaticWeapon, s_fMaxArcDeg))
-			{
-				job.m_fLastThreatInArcMs = nowMs;
-			}
-			else
-			{
-				float quietElapsed = nowMs - job.m_fLastThreatInArcMs;
-				if (quietElapsed >= (s_fQuietTimeoutS * 1000.0))
+				// Pending: mounted only once he is actually in the seat
+				if (seated && !gAcc.IsGettingIn())
 				{
-					DismountGunner(job, "quiet timeout / target cleared");
-					s_aJobs.RemoveOrdered(j);
+					job.m_bMounted = true;
+					job.m_fCrewedSince = nowMs;
+					job.m_fLastThreatInArcMs = nowMs;
+					s_iWeaponsCrewed++;
+					PrintFormat("[BBB] STATIC: %1 (%2) crewing static weapon %3 after %4 s",
+						job.m_Gunner, BBB.s_Hooks.NameOf(job.m_Group), job.m_StaticWeapon, Math.Round((nowMs - job.m_fRequestedMs) / 1000.0));
+				}
+				else
+				{
+					string pendingReason = ReleaseReason(job, nowMs);
+					if (pendingReason == "")
+					{
+						bool behaviourOver = !job.m_GetIn;
+						if (job.m_GetIn)
+						{
+							EAIActionState getInState = job.m_GetIn.GetActionState();
+							behaviourOver = getInState == EAIActionState.COMPLETED || getInState == EAIActionState.FAILED;
+						}
+						bool transition = gAcc && (gAcc.IsGettingIn() || gAcc.IsGettingOut());
+						if (behaviourOver && !transition) pendingReason = "could not board";
+						else if (nowMs - job.m_fRequestedMs > BOARDING_TIMEOUT_MS) pendingReason = "boarding timed out";
+					}
+					if (pendingReason != "")
+					{
+						CancelBoarding(job, pendingReason);
+						s_aJobs.RemoveOrdered(j);
+					}
 					continue;
 				}
+			}
+
+			// Mounted: he left the seat by himself (vanilla turret dismount to investigate
+			// sends him back with its own get-in, so a transition or get-in keeps the job)
+			if (!seated)
+			{
+				bool returning = gAcc && (gAcc.IsGettingIn() || gAcc.IsGettingOut());
+				SCR_AIUtilityComponent gunnerUtility = UtilityOf(job.m_Gunner);
+				if (!returning && gunnerUtility && gunnerUtility.FindActionOfType(SCR_AIGetInVehicle)) returning = true;
+				if (!returning)
+				{
+					s_iWeaponsReleased++;
+					PrintFormat("[BBB] STATIC: %1 left static weapon %2 on his own", job.m_Gunner, job.m_StaticWeapon);
+					s_aJobs.RemoveOrdered(j);
+				}
+				continue;
+			}
+
+			string reason = ReleaseReason(job, nowMs);
+			if (reason != "")
+			{
+				DismountGunner(job, reason);
+				s_aJobs.RemoveOrdered(j);
 			}
 		}
 
@@ -522,8 +644,9 @@ class BBB_StaticWeapons
 		foreach (SCR_AIGroup group : groups)
 		{
 			if (!group || BBB.HasPlayer(group)) continue;
+			if (!BBB.s_Hooks.AllowStaticWeapons(group)) continue;
 
-			// Check if group already has an active gunner job
+			// One weapon per squad at a time
 			bool alreadyCrewing = false;
 			foreach (BBB_StaticGunnerJob activeJob : s_aJobs)
 			{
@@ -545,33 +668,30 @@ class BBB_StaticWeapons
 			IEntity groupAnchor = BBB.AnchorOf(group);
 			if (!groupAnchor) continue;
 
-			// Check if squad is aware of any perceived enemy threats
+			// Only squads that perceive the enemy (own perception, no shared knowledge)
 			vector threatCentroid;
 			if (!BBB_Smoke.GetThreatCentroid(group, threatCentroid)) continue;
 
-			// Scan nearby entities for static weapons
 			s_aQueriedEntities.Clear();
 			GetGame().GetWorld().QueryEntitiesBySphere(groupAnchor.GetOrigin(), s_fSearchRadiusM, CollectStaticWeapon);
 
 			foreach (IEntity candidate : s_aQueriedEntities)
 			{
+				if (BBB.s_Hooks.LeaveAlone(candidate) || IsClaimed(candidate)) continue;
+				if (s_mWeaponRetry.Contains(candidate) && nowMs < s_mWeaponRetry.Get(candidate)) continue;
+
 				BaseCompartmentSlot turretSlot;
 				if (!IsStaticWeapon(candidate, turretSlot)) continue;
+				if (turretSlot.IsReserved()) continue;
 				if (!IsFactionCompatible(group, candidate)) continue;
-
-				// Check if threat is within weapon's traverse arc
 				if (!IsInTraverseArc(candidate, threatCentroid, s_fMaxArcDeg)) continue;
 
-				// Find best foot candidate in squad
 				ChimeraCharacter gunnerCandidate = FindBestCandidate(group, candidate);
 				if (!gunnerCandidate) continue;
 
-				// Crew the weapon
-				if (CrewWeapon(group, gunnerCandidate, candidate, turretSlot))
-				{
-					break; // Group crewed a weapon
-				}
+				if (CrewWeapon(group, gunnerCandidate, candidate, turretSlot)) break;
 			}
+			s_aQueriedEntities.Clear();
 		}
 	}
 }

@@ -7,8 +7,10 @@
 // 2. Retrograde withdrawal: when morale breaks under active contact, the squad
 //    conducts a leap-frogging peel-back (retrograde bounding overwatch) directly
 //    away from the enemy threat centroid to rear cover. One element covers while
-//    the other bounds back, alternating until contact is broken (> 180 m or
-//    out of sight) or max retrograde distance (90 m) is reached.
+//    the other bounds back, alternating until contact is broken (> 180 m, or the
+//    enemy is no longer perceived after real movement), the squad stalls (two bounds
+//    gaining < 3 m) or 90 m of observed ground is gained. Distance counts only what
+//    the squad actually moved away from the threat. 60 s before another withdrawal.
 // 3. Isolated surrender: a lone, out-of-ammo survivor cornered by close enemies
 //    (<= 15 m) with direct sight halts fire, lowers weapon, disables weapon controls
 //    and crouches in place rather than suicide-charging.
@@ -33,8 +35,12 @@ class BBB_GroupMoraleState : Managed
 	ref array<SCR_AIUtilityComponent> m_TeamMove = {};
 	int m_iCoverTeam;
 	int m_iPhase;
-	float m_fTotalWithdrawn;
+	float m_fTotalWithdrawn;        // observed travel away from the threat, not requested distance
 	bool m_bContactBroken;
+	vector m_vBoundStart;           // squad centre when the current bound began
+	int m_iStalledBounds;           // consecutive bounds that gained almost no ground
+	float m_fNextWithdrawAllowed;   // no new withdrawal before this time (s)
+	string m_sEndReason;
 }
 
 class BBB_SurrenderState : Managed
@@ -65,6 +71,9 @@ class BBB_Morale
 	static const float SURRENDER_THREAT_MIN = 0.60;
 	static const float RECOVERY_CALM_TIME_S = 20.0;
 	static const float BREAK_CONTACT_DIST_M = 180.0;
+	static const float MIN_BOUND_GAIN_M = 3.0;      // less than this counts as a stalled bound
+	static const int MAX_STALLED_BOUNDS = 2;
+	static const float WITHDRAW_COOLDOWN_S = 60.0;  // after a withdrawal ends, before another may start
 
 	// State tracking
 	protected static ref array<ref BBB_GroupMoraleState> s_States = {};
@@ -351,12 +360,59 @@ class BBB_Morale
 
 	// ---------------------------------------------------------------- withdrawal execution
 
+	// Centre of the squad's living, conscious members (the leader may be in the covering half)
+	static bool SquadCenter(SCR_AIGroup group, out vector outCenter)
+	{
+		outCenter = vector.Zero;
+		if (!group) return false;
+		array<AIAgent> agents = {};
+		BBB.s_Hooks.GetMembers(group, agents);
+		int count = 0;
+		foreach (AIAgent agent : agents)
+		{
+			if (!agent) continue;
+			ChimeraCharacter character = ChimeraCharacter.Cast(agent.GetControlledEntity());
+			if (!character || !BBB.IsAlive(character)) continue;
+			CharacterControllerComponent controller = character.GetCharacterController();
+			if (!controller || controller.IsUnconscious()) continue;
+			outCenter = outCenter + character.GetOrigin();
+			count++;
+		}
+		if (count == 0) return false;
+		outCenter = outCenter * (1.0 / count);
+		return true;
+	}
+
+	// Ground actually gained away from the threat since the bound began (never negative)
+	static float GainAway(vector boundStart, vector now, vector threatCenter)
+	{
+		vector away = boundStart - threatCenter;
+		away[1] = 0;
+		if (away.LengthSq() < 0.01) return 0;
+		away.Normalize();
+		vector moved = now - boundStart;
+		moved[1] = 0;
+		float gain = vector.Dot(moved, away);
+		if (gain < 0) return 0;
+		return gain;
+	}
+
+	protected static void EndWithdrawal(BBB_GroupMoraleState state, float now, bool contactBroken, string reason, float threatDist)
+	{
+		state.m_bWithdrawing = false;
+		state.m_bContactBroken = contactBroken;
+		state.m_sEndReason = reason;
+		state.m_fNextWithdrawAllowed = now + WITHDRAW_COOLDOWN_S;
+		if (contactBroken) s_iContactsBroken++;
+		PrintFormat("[BBB] MORALE: Squad %1 ended withdrawal (%2, contact broken=%3, withdrawn=%4 m, threat dist=%5 m)",
+			BBB.s_Hooks.NameOf(state.m_Group), reason, contactBroken, Math.Round(state.m_fTotalWithdrawn), Math.Round(threatDist));
+	}
+
 	protected static void StartWithdrawal(BBB_GroupMoraleState state, vector threatCenter, float now)
 	{
-		IEntity anchor = BBB.AnchorOf(state.m_Group);
-		if (!anchor) return;
+		vector squadCenter;
+		if (!SquadCenter(state.m_Group, squadCenter)) return;
 
-		vector squadCenter = anchor.GetOrigin();
 		state.m_vThreatCenter = threatCenter;
 		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, threatCenter, s_fRetrogradeBoundDist);
 		state.m_bWithdrawing = true;
@@ -364,11 +420,13 @@ class BBB_Morale
 		state.m_fPhaseSince = now;
 		state.m_fTotalWithdrawn = 0;
 		state.m_bContactBroken = false;
+		state.m_iStalledBounds = 0;
+		state.m_sEndReason = "";
 		state.m_iPhase = 0;
 		state.m_iCoverTeam = 0;
 
 		s_iWithdrawalsStarted++;
-		PrintFormat("[BBB] MORALE: Squad %1 broke contact (score=%2, initial=%3), withdrawing away from %4 to %5",
+		PrintFormat("[BBB] MORALE: Squad %1 morale broke (score=%2, initial=%3), withdrawing away from %4 to %5",
 			BBB.s_Hooks.NameOf(state.m_Group), state.m_fMorale, state.m_iInitialCount, threatCenter, state.m_vWithdrawPos);
 
 		ExecuteBoundingPhase(state);
@@ -400,8 +458,11 @@ class BBB_Morale
 		if (consciousMembers.IsEmpty())
 		{
 			state.m_bWithdrawing = false;
+			state.m_sEndReason = "no one able to move";
 			return;
 		}
+		vector boundStart;
+		if (SquadCenter(state.m_Group, boundStart)) state.m_vBoundStart = boundStart;
 
 		// Split into two logical elements for bounding overwatch
 		int half = consciousMembers.Count() / 2;
@@ -466,7 +527,7 @@ class BBB_Morale
 		bool allArrived = true;
 		foreach (SCR_AIUtilityComponent mover : state.m_TeamMove)
 		{
-			if (!mover || !mover.m_OwnerEntity || !BBB.IsAlive(mover.m_OwnerEntity)) continue;
+			if (!mover || !mover.m_OwnerEntity || !BBB.IsAlive(mover.m_OwnerEntity) || !mover.m_CombatMoveState) continue;
 			float distToDest = vector.DistanceXZ(mover.m_OwnerEntity.GetOrigin(), state.m_vWithdrawPos);
 			if (distToDest > 6.0 && mover.m_CombatMoveState.IsMoving())
 			{
@@ -475,44 +536,55 @@ class BBB_Morale
 			}
 		}
 
-		if (allArrived || phaseElapsed >= BOUND_TIMEOUT_S)
+		if (!allArrived && phaseElapsed < BOUND_TIMEOUT_S) return;
+
+		// Count only the ground the squad actually gained away from the threat
+		vector squadCenter;
+		if (!SquadCenter(state.m_Group, squadCenter))
 		{
-			state.m_fTotalWithdrawn = state.m_fTotalWithdrawn + s_fRetrogradeBoundDist;
-			state.m_iPhase++;
-			state.m_fPhaseSince = now;
-
-			// Check termination criteria
-			vector threatCenter;
-			bool hasThreat = GetThreatCentroid(state.m_Group, threatCenter);
-
-			IEntity anchor = BBB.AnchorOf(state.m_Group);
-			float currentDistToThreat = 999.0;
-			if (anchor && hasThreat)
-			{
-				currentDistToThreat = vector.DistanceXZ(anchor.GetOrigin(), threatCenter);
-			}
-
-			// Termination 1: Max withdrawal distance reached
-			// Termination 2: Threat distance safely opened
-			// Termination 3: No threat detected anymore
-			if (state.m_fTotalWithdrawn >= s_fMaxWithdrawDist || currentDistToThreat >= BREAK_CONTACT_DIST_M || !hasThreat)
-			{
-				state.m_bWithdrawing = false;
-				state.m_bContactBroken = true;
-				s_iContactsBroken++;
-				PrintFormat("[BBB] MORALE: Squad %1 successfully broke contact (total withdrawn=%2 m, threat dist=%3 m)",
-					BBB.s_Hooks.NameOf(state.m_Group), state.m_fTotalWithdrawn, currentDistToThreat);
-				return;
-			}
-
-			// Continue withdrawal: swap roles and bound again
-			state.m_iCoverTeam = 1 - state.m_iCoverTeam;
-			vector squadCenter = anchor.GetOrigin();
-			state.m_vThreatCenter = threatCenter;
-			state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, threatCenter, s_fRetrogradeBoundDist);
-
-			ExecuteBoundingPhase(state);
+			EndWithdrawal(state, now, false, "squad gone", 0);
+			return;
 		}
+		float gain = GainAway(state.m_vBoundStart, squadCenter, state.m_vThreatCenter);
+		state.m_fTotalWithdrawn = state.m_fTotalWithdrawn + gain;
+		if (gain < MIN_BOUND_GAIN_M) state.m_iStalledBounds++;
+		else state.m_iStalledBounds = 0;
+		state.m_iPhase++;
+		state.m_fPhaseSince = now;
+
+		vector threatCenter;
+		bool hasThreat = GetThreatCentroid(state.m_Group, threatCenter);
+		float currentDistToThreat = 0;
+		if (hasThreat) currentDistToThreat = vector.DistanceXZ(squadCenter, threatCenter);
+
+		// Contact is broken only by real separation or by losing the enemy after real movement
+		if (hasThreat && currentDistToThreat >= BREAK_CONTACT_DIST_M)
+		{
+			EndWithdrawal(state, now, true, "out of range", currentDistToThreat);
+			return;
+		}
+		if (!hasThreat)
+		{
+			EndWithdrawal(state, now, state.m_fTotalWithdrawn >= s_fRetrogradeBoundDist * 0.5, "enemy no longer perceived", 0);
+			return;
+		}
+		if (state.m_iStalledBounds >= MAX_STALLED_BOUNDS)
+		{
+			EndWithdrawal(state, now, false, "stalled", currentDistToThreat);
+			return;
+		}
+		if (state.m_fTotalWithdrawn >= s_fMaxWithdrawDist)
+		{
+			EndWithdrawal(state, now, false, "max distance", currentDistToThreat);
+			return;
+		}
+
+		// Continue withdrawal: swap roles and bound again
+		state.m_iCoverTeam = 1 - state.m_iCoverTeam;
+		state.m_vThreatCenter = threatCenter;
+		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, threatCenter, s_fRetrogradeBoundDist);
+
+		ExecuteBoundingPhase(state);
 	}
 
 	// ---------------------------------------------------------------- surrender
@@ -677,7 +749,7 @@ class BBB_Morale
 			}
 
 			// Check if morale broke and threat exists
-			if (state.m_fMorale >= 0.70 && aliveCount > 0)
+			if (state.m_fMorale >= 0.70 && aliveCount > 0 && now >= state.m_fNextWithdrawAllowed)
 			{
 				vector threatCenter;
 				if (GetThreatCentroid(group, threatCenter))
