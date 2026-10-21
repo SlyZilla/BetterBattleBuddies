@@ -15,7 +15,7 @@ class BBB_FireTeamJob : Managed
 class BBB_FireManeuver
 {
  static bool s_bRead;
- static bool s_bOn;
+ static bool s_bOn = true;
  static int s_iStarted, s_iSwaps, s_iRequests, s_iArrived, s_iNoCover, s_iCoverShots;
  static int s_iTicks, s_iTickMs, s_iTickMax, s_iDecisionMs, s_iEventMs;
  protected static bool s_bInTick;

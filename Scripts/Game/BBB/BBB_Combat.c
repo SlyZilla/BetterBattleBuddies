@@ -15,7 +15,7 @@ class BBB_Combat
 	static bool s_bDetail = true;
 	static bool s_bRadio = true;
 	static bool s_bResponse = true;
-	static bool s_bManeuver;
+	static bool s_bManeuver = true;
 	static int s_iWakeups;
 	static int s_iReports;
 	static int s_iResponses;
@@ -50,7 +50,7 @@ class BBB_Combat
 		if (System.GetCLIParam("bbbCombatDetail", value) && value == "0") s_bDetail = false;
 		if (System.GetCLIParam("bbbCombatRadio", value) && value == "0") s_bRadio = false;
 		if (System.GetCLIParam("bbbCombatResponse", value) && value == "0") s_bResponse = false;
-		if (System.GetCLIParam("bbbCombatManeuver", value) && value == "1") s_bManeuver = true;
+		if (System.GetCLIParam("bbbCombatManeuver", value)) s_bManeuver = value == "1";
 		PrintFormat("[BBB] COMBAT detail=%1 radio=%2 response=%3 maneuver=%4", s_bDetail, s_bRadio, s_bResponse, s_bManeuver);
 	}
 

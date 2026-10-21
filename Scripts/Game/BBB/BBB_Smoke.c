@@ -28,7 +28,7 @@ class BBB_SmokeCloud : Managed
 class BBB_Smoke
 {
 	static bool s_bRead;
-	static bool s_bOn;
+	static bool s_bOn = true;
 	static bool s_bDrag = true;
 	static bool s_bManeuver = true;
 	static bool s_bMorale = true;

@@ -47,7 +47,7 @@ class BBB_ArmorReaction
   if (s_bRead) return;
   s_bRead = true;
   string value;
-  s_bOn = System.GetCLIParam("bbbArmorReaction", value) && value == "1";
+  s_bOn = !(System.GetCLIParam("bbbArmorReaction", value) && value == "0");
   PrintFormat("[BBB] ARMOR REACTION enabled=%1", s_bOn);
  }
 

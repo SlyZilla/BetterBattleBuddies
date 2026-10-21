@@ -29,7 +29,7 @@
 class BBB_Medic
 {
  static bool s_bRead;
- static bool s_bOn = false;
+ static bool s_bOn = true;
  // Test only: soldiers that keep vanilla healing (the A/B sides of BBB_MedicTest).
  static ref array<IEntity> s_aVanilla = {};
 

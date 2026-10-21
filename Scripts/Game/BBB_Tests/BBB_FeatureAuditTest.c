@@ -181,7 +181,7 @@ class BBB_FeatureAuditTest : BBB_AimTest
 	void BeginAudit()
 	{
 		BBB_Morale.Read(); BBB_Smoke.Read(); BBB_StaticWeapons.Read(); BBB_Grenades.Read(); BBB_Medic.Read();
-		BBB_Morale.s_bOn = false; BBB_StaticWeapons.s_bOn = false; BBB_Smoke.s_bOn = false; BBB_Grenades.s_bOn = false;
+		BBB_Morale.s_bOn = false; BBB_StaticWeapons.s_bOn = false; BBB_Smoke.s_bOn = false; BBB_Grenades.s_bOn = false; BBB_Buildings.s_bOn = false; // indoor moves break the fixed outdoor throw geometry
 		vector at = BBB.Ground(Vector(3050, 0, 1700));
 		NavmeshWorldComponent navmesh = Navmesh();
 		if (navmesh)

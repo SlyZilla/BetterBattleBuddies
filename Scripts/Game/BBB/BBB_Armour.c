@@ -16,7 +16,7 @@
 // exposed PKM or M2 gunner above all) can be shot, and holding fire at them left
 // riflemen watching a UAZ gunner kill them (20 Oct live, ACA Everon).
 // Host options: -bbbArmour 0 (off), -bbbArmourHits <n> (hits before a verdict, default 12),
-//               -bbbArmourScatter 1 / -bbbAntiArmor 1 (opt-in: non-AT men go low near armour).
+//               -bbbArmourScatter 0 / -bbbAntiArmor 0 turns off non-AT men going low near armour (on by default).
 class BBB_ArmourStat : Managed
 {
  int m_iHits;
@@ -39,7 +39,7 @@ class BBB_Armour
  static bool s_bRead;
  static bool s_bOn = true;
  static bool s_bLearn = true; // learning runs even while a test switches the behaviour off
- static bool s_bScatter = false; // forced crouch/prone near armour: no behaviour A/B yet
+ static bool s_bScatter = true; // forced crouch/prone near armour: on by default (20 Oct), no behaviour A/B yet
  static int s_iMinHits = 12;
  static const float THROUGH_SHARE = 0.1;
  static const float HIT_EFFECTIVE = 1.0; // effective damage that counts as getting through

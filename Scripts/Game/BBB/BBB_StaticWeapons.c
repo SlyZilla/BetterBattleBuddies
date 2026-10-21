@@ -37,7 +37,7 @@ class BBB_StaticGunnerJob : Managed
 class BBB_StaticWeapons
 {
 	static bool s_bRead;
-	static bool s_bOn;
+	static bool s_bOn = true;
 
 	// Tunable parameters
 	static float s_fSearchRadiusM = 35.0;

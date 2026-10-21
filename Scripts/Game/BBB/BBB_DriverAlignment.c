@@ -63,7 +63,7 @@ class BBB_DriverAlignment
   if (s_bRead) return;
   s_bRead = true;
   string value;
-  s_bOn = System.GetCLIParam("bbbDriverAlign", value) && value == "1";
+  s_bOn = !(System.GetCLIParam("bbbDriverAlign", value) && value == "0");
  }
 
  static bool TraceOther(notnull IEntity entity)

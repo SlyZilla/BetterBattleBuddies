@@ -55,7 +55,7 @@ class BBB_SurrenderState : Managed
 class BBB_Morale
 {
 	static bool s_bRead;
-	static bool s_bOn;
+	static bool s_bOn = true;
 	static bool s_bSurrenderOn = true;
 
 	// Tunable thresholds

@@ -53,7 +53,7 @@ class BBB_Buildings
   if (s_bRead) return;
   s_bRead = true;
   string value;
-  s_bOn = System.GetCLIParam("bbbBuildings", value) && value == "1";
+  s_bOn = !(System.GetCLIParam("bbbBuildings", value) && value == "0");
   PrintFormat("[BBB] BUILDINGS enabled=%1", s_bOn);
  }
 

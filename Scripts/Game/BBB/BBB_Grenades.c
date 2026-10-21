@@ -20,7 +20,7 @@
 class BBB_Grenades
 {
 	static bool s_bRead;
-	static bool s_bOn;
+	static bool s_bOn = true;
 
 	// Tunable parameters
 	static float s_fMinThrowDistM = 12.0;

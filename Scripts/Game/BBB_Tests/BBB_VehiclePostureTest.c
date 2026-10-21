@@ -61,6 +61,7 @@ class BBB_VehiclePostureTest : BBB_AimTest
   BBB_DriverAlignment.Read();
   BBB_CrewTurnout.s_bOn = false;
   BBB_DriverAlignment.s_bOn = false;
+  BBB_FireManeuver.s_bOn = false; // bounding infantry shifts the target geometry mid-check
   ResourceName vehiclePrefab = "{C012BB3488BEA0C2}Prefabs/Vehicles/Wheeled/BTR70/BTR70.et";
   if (!m_bTurnout) vehiclePrefab = "{BBB0A11900000002}Prefabs/BBB_Tests/BBB_AlignmentVehicle.et";
   vector at = BBB.Ground(Vector(2880, 0, 1580));

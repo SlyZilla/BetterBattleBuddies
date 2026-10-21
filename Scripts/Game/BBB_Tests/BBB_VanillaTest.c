@@ -280,9 +280,9 @@ class BBB_VanillaTest
   bool isThreat = BBB_Armour.IsArmoredThreat(vehicle);
   bool notArmour = !isThreat && !BBB_Armour.Armoured(vehicle);
 
-  // 3. Scatter execution (opt-in, forced on here): call CheckGroupAntiArmor with forced threat
+  // 3. Scatter execution (on by default): call CheckGroupAntiArmor with forced threat
   bool savedScatter = BBB_Armour.s_bScatter;
-  bool scatterDefaultOff = !BBB_Armour.ScatterOn();
+  bool scatterDefaultOn = BBB_Armour.ScatterOn();
   BBB_Armour.s_bScatter = true;
   BBB_Armour.Stop();
   float nowMs = GetGame().GetWorld().GetWorldTime();
@@ -308,8 +308,8 @@ class BBB_VanillaTest
    }
   }
 
-  bool ok = !riflemanHasAT && notArmour && scatterDefaultOff && scattered && stanceApplied && recovered;
-  PrintFormat("[BBB] ANTIARMOR regression ok=%1 noAT=%2 humveeNotArmour=%3 defaultOff=%4 lowStance=%5 stance=%6 recovered=%7", ok, !riflemanHasAT, notArmour, scatterDefaultOff, scattered, stanceApplied, recovered);
+  bool ok = !riflemanHasAT && notArmour && scatterDefaultOn && scattered && stanceApplied && recovered;
+  PrintFormat("[BBB] ANTIARMOR regression ok=%1 noAT=%2 humveeNotArmour=%3 defaultOn=%4 lowStance=%5 stance=%6 recovered=%7", ok, !riflemanHasAT, notArmour, scatterDefaultOn, scattered, stanceApplied, recovered);
   return ok;
  }
 

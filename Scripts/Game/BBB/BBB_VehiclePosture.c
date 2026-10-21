@@ -122,7 +122,7 @@ class BBB_CrewTurnout
   if (s_bRead) return;
   s_bRead = true;
   string value;
-  s_bOn = System.GetCLIParam("bbbCrewTurnout", value) && value == "1";
+  s_bOn = !(System.GetCLIParam("bbbCrewTurnout", value) && value == "0");
  }
 
  static BBB_CrewTurnoutState State(ChimeraCharacter body, BaseCompartmentSlot seat)

@@ -92,7 +92,7 @@ class BBB_ReactionTest : BBB_AimTest
 
  void Setup()
  {
-  Assert("default-off", !BBB_ArmorReaction.s_bOn && !BBB_Buildings.s_bOn);
+  Assert("default-on", BBB_ArmorReaction.s_bOn && BBB_Buildings.s_bOn);
   Assert("segment-near", BBB_ArmorReaction.SegmentDistance("0 1 0", "-20 1 0", "20 1 0") < 0.01);
   Assert("segment-behind", BBB_ArmorReaction.SegmentDistance("-20 1 0", "0 1 0", "20 1 0") > 19);
   Assert("segment-zero", Math.AbsFloat(BBB_ArmorReaction.SegmentDistance("0 0 5", "0 0 0", "0 0 0") - 5) < 0.01);
