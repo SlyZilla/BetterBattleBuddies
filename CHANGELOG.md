@@ -25,6 +25,9 @@
 - Added tactical smoke screening (`-bbbSmoke 0` disables): AI squads autonomously deploy smoke grenades to screen casualty drags (`BBB_Drag`), bounding maneuver advances (`BBB_FireManeuver`), and retrograde break-contact bounds (`BBB_Morale`) directly toward perceived enemy threat sectors. Features spherical line-of-sight occlusion tracking (`BBB_Smoke.IsOccluded`), squad cooldowns, and strict safety guards respecting player control and orders.
 - Added squad morale, retrograde break-contact withdrawal and surrender (`-bbbMorale 0` disables): autonomous infantry squads suffering heavy casualties (>= 50%), squad leader loss or heavy suppression conduct covered peel-back bounds to disengage from active contacts, stopping if they can't actually get away; isolated, out-of-ammo soldiers cornered by close enemies (<= 15 m) surrender instead of charging blindly.
 
+- Added a "what is he thinking" panel for hosts and mission makers (`-bbbThink 1`, off by default): look at an AI soldier to see what BBB decided for him and his squad and why, including when it held back. `-bbbThink 2` also writes these notes to the server log.
+- Bug reports and ideas can now go to Discord (discord.gg/WK8xGSztB): #issues for bugs (choose BBB), #suggestions for ideas, no GitHub account needed. GitHub Issues remain available.
+
 ## 0.1.4 — released
 
 - Expanded the Workshop overview with standalone scenario use, squad-command compatibility, server options and public GitHub source/issue links.
