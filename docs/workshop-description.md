@@ -26,7 +26,7 @@ KEEP THE VEHICLE WORKING
 - Replace a lost turret gunner with an eligible AI squadmate. Commander positions count as crew and stay aboard when passengers dismount under fire.
 - Passengers dismount from slowing vehicles under fire while fighting crews remain aboard. Stuck drivers can reverse and steer clear.
 - Supported armoured crew positions turn out when quiet and button up when danger returns.
-- Idle drivers can make a small guarded adjustment for a gunner's visible target outside a limited turret arc.
+- Idle wheeled-vehicle drivers can make a small guarded adjustment for a gunner's visible target outside a limited turret arc.
 - Supported vehicles use fitted smoke weapons against launcher fire; slow wheeled vehicles can also make a short guarded reverse.
 
 Scanning, quiet marching, weapon readiness, spent-launcher handling and personal bios are included.

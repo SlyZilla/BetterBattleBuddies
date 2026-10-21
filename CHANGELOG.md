@@ -24,7 +24,7 @@ More initiative under fire, with your orders still in charge. This update enable
 ### Crews, doors and squad cohesion
 
 - Supported armoured crew positions turn out after a quiet period and button up when danger returns (-bbbCrewTurnout 0).
-- Idle AI drivers can make a small, guarded adjustment to bring a gunner's visible target inside a limited turret arc. Player driving, movement orders and unsafe ground take priority (-bbbDriverAlign 0).
+- Idle wheeled-vehicle drivers can make a small, guarded adjustment to bring a gunner's visible target inside a limited turret arc. Player driving, movement orders and unsafe ground take priority (-bbbDriverAlign 0).
 - Against launcher fire, supported vehicles use fitted smoke weapons; slow wheeled vehicles can also make a short guarded reverse (-bbbArmorReaction 0).
 - Turret-linked commander seats count as crew, keeping their occupants aboard when passengers dismount under fire (-bbbCommanderCrew 0).
 - Soldiers stuck at a house door while trying to move can swing it fully open or flip it to the other side. Doors are never closed on anyone (-bbbDoorUnstick 0).
