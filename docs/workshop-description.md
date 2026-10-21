@@ -1,50 +1,56 @@
 Better Battle Buddies
 
-Keep your head on a swivel. Keep the gun in the fight. And when the blast comes, hit the dirt.
+Keep the gun in the fight. Cover your buddy. Know when to get out.
 
-Better Battle Buddies brings general AI improvements to Arma Reforger: sharper scanning, weapon-readiness fixes, heavier suppression reactions, medical smoke and vehicle helpers. Run it in vanilla scenarios on its own, or alongside AC: Actual. No commander game mode is included, and AC: Actual is not required.
+BBB gives Arma Reforger's AI more initiative in a firefight: covering fire and movement, smoke, casualty aid, grenades, indoor cover and vehicle-crew reactions. Enable it for the AI already in your scenario. It runs standalone or alongside AC: Actual; no commander game mode is included or required.
 
-WHAT YOUR BUDDIES DO
+FIGHT AS A SQUAD
 
-- Watch the horizon and recover weapon readiness when trouble starts.
-- Lower weapons during quiet ordinary travel and recover readiness when danger returns; combat and explicit tactical orders take priority.
-- Throw smoke toward a threat before advancing to an exposed casualty, waiting briefly for the cloud to bloom.
-- Passengers bail out of a slowing vehicle under fire while turret crews stay aboard.
-- Reverse and steer out of vehicle snags, handle doors and gates, and discard spent launchers. Personal bios give the soldiers a little character too.
+- Alternate covering fire and movement toward reported contacts. Covering soldiers can keep firing on a recent enemy position after the enemy ducks.
+- Use carried grenades against nearby enemies in cover, with friendly-clearance and throwing-route checks.
+- Seek indoor cover near detected enemies and investigate reachable positions when contacts are inside. Stalled routes are abandoned.
+- Walk to and crew nearby loaded friendly static weapons during contact, then give them up for orders or when no longer useful.
+- Screen advances, casualty drags and withdrawals with smoke. At night, use carried flares to illuminate recently sighted enemy sectors.
+- Badly battered autonomous squads can withdraw in covered bounds. Isolated, out-of-ammo survivors cornered by close enemies can surrender.
 
-COMBAT REACTIONS AND SURVIVAL
+LOOK AFTER EACH OTHER
 
-- Prevent mode cycling with reliable fire-selector fallback handling.
-- Feel the pressure of elevated and flanking fire. Ambushes shock calm squads, and sustained suppression keeps heads down longer.
-- Hit the dirt as a nearby blast reaches them, with a 343 m/s acoustic reaction delay: prone close in, crouched farther out.
-- Keep a turret manned when a gunner goes down, autonomously promoting available AI squadmates into the gun.
-- Get low against armor: non-AT infantry adopt low stances to minimize profile when facing armored vehicles, while rocket specialists hold position to engage.
-- Scavenge compatible ammunition, rocket launchers and rockets from nearby casualties when critically low in combat. Searches check reach and obstructions, retry interrupted trips and yield to explicit player/GM orders.
+- Medics and teammates throw smoke before approaching exposed casualties. Medics fight nearby visible enemies first and limit backtracking during a firefight.
+- Keep spotting and fighting when pinned in the open; keep heads down when cover is available. Elevated and flanking fire, ambushes and explosions affect suppression.
+- Get low as nearby blasts arrive. Against recently seen armour, riflemen reduce their profile while AT specialists retain their firing stance.
+- Scavenge compatible ammunition, launchers and rockets from nearby casualties when critically short. Soldiers already bounding or withdrawing keep their task.
+- Follow an awake squad member when the leader is knocked out. Open a house door fully, or flip it to the other side, when it blocks movement.
 
-WHERE IT FITS
+KEEP THE VEHICLE WORKING
 
-Use BBB for the AI already in your scenario: infantry patrols, firefights, casualty aid and ground-vehicle crews. It does not recruit a squad or issue your battle plan. AC: Actual adds map-level command and logistics; the optional AiO Command Menu gives orders to your own linked squad. BBB can run without either.
+- Replace a lost turret gunner with an eligible AI squadmate. Commander positions count as crew and stay aboard when passengers dismount under fire.
+- Passengers dismount from slowing vehicles under fire while fighting crews remain aboard. Stuck drivers can reverse and steer clear.
+- Supported armoured crew positions turn out when quiet and button up when danger returns.
+- Idle drivers can make a small guarded adjustment for a gunner's visible target outside a limited turret arc.
+- Supported vehicles use fitted smoke weapons against launcher fire; slow wheeled vehicles can also make a short guarded reverse.
 
-Mission makers can add BBB as a dependency to bring these behaviors to their scenarios. There is no ACA manager or commander setup to place for standalone use; BBB starts its vanilla integration automatically.
+Scanning, quiet marching, weapon readiness, spent-launcher handling and personal bios are included.
 
-GET STARTED
+YOUR ORDERS COME FIRST
 
-Download and enable BBB, then start a scenario with AI, such as Conflict or Game Master. Multiplayer requires the addon on the server and joining clients. No other mod is required. ACE is optional; ACE-dependent features need ACE loaded.
+Autonomous features respect player control, explicit player/GM orders and host-mod policy. BBB does not recruit soldiers, create a squad or replace your battle plan. AC: Actual supplies map-level command and logistics; the optional AiO Command Menu gives orders to your linked squad. BBB needs neither.
 
-OPTIONS AND LIMITS
+Buildings and vehicle movement still depend on Reforger's navigation, equipment and current orders. Indoor movement does not guarantee every room is cleared. Grenades, smoke and flares use equipment the soldiers carry; vehicle smoke needs a supported fitted weapon. Host scenarios can restrict features.
 
-Medic smoke is on by default. The separate safer-healing option and experimental combat features remain opt-in. Server startup options include -bbbMedicSmoke 0 to disable smoke and -bbbMedic 1 to enable safer healing. Individual opt-outs include -bbbThreatGeometry 0, -bbbThreatDecay 0, -bbbThreatExplosion 0, -bbbGunnerReplace 0, -bbbArmourScatter 0 and -bbbRearm 0. Use -bbbRearmRadius <metres> to change the 25 m scavenging radius (5–100 m).
+GET STARTED AND TUNE IT
 
-BBB works through Reforger's AI: terrain, pathfinding, equipment and current orders still matter. AC: Actual supplies its own commander, logistics and vehicle-driving decisions through BBB's host hooks.
+Enable BBB and start a scenario with AI, such as Conflict or Game Master. Multiplayer requires it on the server and joining clients. No other mod is required; ACE-specific features need ACE. Mission makers can add BBB as a dependency; standalone integration starts automatically.
 
-SOURCE, GUIDE AND FEEDBACK
+In 0.1.5, combat, medical and vehicle features are enabled by default. Server owners can disable them individually, including -bbbFireManeuver 0, -bbbMedic 0, -bbbSmoke 0, -bbbMorale 0, -bbbGrenades 0, -bbbStaticWeapons 0, -bbbBuildings 0, -bbbFlares 0, -bbbCrewTurnout 0, -bbbDriverAlign 0 and -bbbArmorReaction 0. Use -bbbFireCoverOrders 0 to disable ordered covering fire alone.
 
-Public GitHub: https://github.com/propst-design/BetterBattleBuddies
-Read the README for setup and compatibility.
-Discord reports and ideas: https://discord.gg/WK8xGSztB
-Use #issues for bugs (choose BBB), #suggestions for ideas. No GitHub account needed.
+The optional Think panel stays off: hosts can use -bbbThink 1 and look at a soldier to see BBB's decisions and reasons for holding back. -bbbThink 2 also logs them.
+
+GUIDE, FEEDBACK AND CREDITS
+
+Source and guide: https://github.com/propst-design/BetterBattleBuddies
+Discord: https://discord.gg/WK8xGSztB
+Use #issues for BBB bugs and #suggestions for ideas. No GitHub account needed.
 GitHub alternative: https://github.com/propst-design/BetterBattleBuddies/issues
+Reports: include versions, scenario, mods, host/client role, steps and console.log/script.log from the affected server and client.
 
-When reporting a problem, include versions, scenario, other mods, host/client role, steps and expected behavior. Attach the affected console.log and script.log; normal game logs are under Documents\My Games\ArmaReforger\logs, with custom profiles/server setups using their configured location. Multiplayer reports benefit from both server and affected client logs.
-
-Directed and tested by Jacob; developed with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); full original attribution and project credits are retained in the included LICENSE.md.
+Directed and tested by Jacob; developed with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); original attribution and full credits are retained in LICENSE.md.

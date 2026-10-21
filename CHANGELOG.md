@@ -2,31 +2,39 @@
 
 ## 0.1.5 — unreleased
 
-- Every BBB feature is now on by default, including fire and manoeuvre, safer medic healing, grenades, smoke, morale, static weapons, building garrison, vehicle defence, crew turnout, driver alignment and flares. Each one still has its own server option to switch it off (`-bbbFireManeuver 0`, `-bbbMedic 0`, `-bbbCombatManeuver 0` and the options listed below).
-- Fire and manoeuvre now actually bounds: while one team moves, the other is ordered to keep firing on the enemy's last reported position, so the bound no longer stalls the moment the enemy ducks. Movers carry on through a short pause in covering fire, and the manoeuvre keeps going when a man is hit (`-bbbFireCoverOrders 0` turns the ordered covering fire off).
-- Squads no longer anchor on a knocked-out leader: an awake soldier takes over as the squad's reference point, so squads stop gathering round a body that can't move.
-- Medics in a fight no longer walk more than 75 m back to a casualty, so they don't leave their squad behind; when it's quiet, or the squad closes up, they still go.
-- Soldiers in the middle of a bound or a withdrawal are no longer sent off to loot bodies or man a static weapon.
-- Added doorway unsticking (`-bbbDoorUnstick 0` disables): a soldier who stands stuck next to a house door while trying to move gets that door swung fully open, or flipped to its other side. Doors are never closed on anyone.
-- Added autonomous night illumination (`-bbbFlares 0` disables): soldiers carrying flare ammunition illuminate recently sighted enemy sectors, with player/GM order vetoes and shared squad/area cooldowns to limit repeated launches.
-- AI pinned down in the open now fight back instead of freezing: a suppressed soldier with no cover keeps spotting enemies, shoots without the extra hesitation and fires faster and looser. In cover they still keep their heads down (`-bbbExposedFire 0` restores the old behaviour).
-- Medics no longer walk past an enemy they can see on their way to a casualty: with a visible enemy within 50 m they fight first, then go. Soldiers dragging a casualty let go and shoot back when they see an enemy within 20 m.
-- Fixed riflemen ignoring jeeps and Humvees: once rifle hits had bounced off a UAZ or Humvee hull, AI stopped shooting at it for the rest of the game, even at its exposed machine gunner. Only real armour (APCs, IFVs, tanks) is now treated as immune to rifle fire.
-- Infantry no longer drop flat whenever an enemy vehicle with a turret is anywhere within 450 m. The get-low reaction now only answers real armour seen in the last 10 seconds and is on by default (`-bbbArmourScatter 0` turns it off).
-- Fixed AI holding a very fast-firing weapon mode who could aim but never fire.
-- Added armored-crew turnout (`-bbbCrewTurnout 0` disables): supported AI crew positions turn out after a quiet period, then button up when threats, incoming fire or vehicle hits return.
-- Added limited-turret driver alignment (`-bbbDriverAlign 0` disables): idle AI drivers can make a small adjustment on clear, level ground for their gunner's visible, viable target. Movement orders, player control and unsafe positions prevent the adjustment.
-- Added vehicle defence against launcher fire (`-bbbArmorReaction 0` disables): supported fitted smoke weapons fire and slow wheeled vehicles can make a short, guarded reverse maneuver. Player driving and movement orders take priority.
-- Added building garrison and clearing (`-bbbBuildings 0` disables): infantry use native indoor cover near detected enemies, hold their positions and investigate further indoor cover when contacts are inside. Failed routes are abandoned; player orders take priority.
-- Vehicle commanders (such as the LAV-25 commander's seat) now count as crew, not passengers: they stay aboard when passengers dismount under fire, and a commander left on his own is treated as the vehicle's crew (`-bbbCommanderCrew 0` restores the old behaviour).
-- Fixed medic smoke: medics and teammates now actually throw the smoke cover added in 0.1.2 (the throw was silently skipped before).
-- Added autonomous hand grenade employment (`-bbbGrenades 0` disables): infantry squads engaging perceived enemies in cover or defilade within throwing range (10-35 m) evaluate tactical grenade opportunities. Verifies fragmentation grenade availability, friendly blast safety clearance (>= 14 m), clear throwing corridor (2.5 m), and trajectory clearance without point-blank obstructions, enforcing a 25 s squad cooldown.
-- Added autonomous static weapon crewing (`-bbbStaticWeapons 0` disables): idle or defending autonomous squads in contact locate nearby operational, loaded friendly static weapons or defensible turrets (<= 35 m) with threats in their traverse arc (default <= 60 deg). The nearest fit squadmate walks over and climbs in (no teleporting); he gives the gun up for player and Game Master orders and host-mod rules, and automatically releases and dismounts when ordered on, tether distance is exceeded, targets are cleared for 15 s, ammunition is exhausted, or the weapon is destroyed.
-- Added tactical smoke screening (`-bbbSmoke 0` disables): AI squads autonomously deploy smoke grenades to screen casualty drags (`BBB_Drag`), bounding maneuver advances (`BBB_FireManeuver`), and retrograde break-contact bounds (`BBB_Morale`) directly toward perceived enemy threat sectors. Features spherical line-of-sight occlusion tracking (`BBB_Smoke.IsOccluded`), squad cooldowns, and strict safety guards respecting player control and orders.
-- Added squad morale, retrograde break-contact withdrawal and surrender (`-bbbMorale 0` disables): autonomous infantry squads suffering heavy casualties (>= 50%), squad leader loss or heavy suppression conduct covered peel-back bounds to disengage from active contacts, stopping if they can't actually get away; isolated, out-of-ammo soldiers cornered by close enemies (<= 15 m) surrender instead of charging blindly.
+More initiative under fire, with your orders still in charge. This update enables BBB's combat, medical and vehicle features by default; each retains its own server off switch. The optional Think panel remains off.
 
-- Added a "what is he thinking" panel for hosts and mission makers (`-bbbThink 1`, off by default): look at an AI soldier to see what BBB decided for him and his squad and why, including when it held back. `-bbbThink 2` also writes these notes to the server log.
-- Bug reports and ideas can now go to Discord (discord.gg/WK8xGSztB): #issues for bugs (choose BBB), #suggestions for ideas, no GitHub account needed. GitHub Issues remain available.
+### Fire and movement
+
+- Fireteams alternate covering fire and movement. Covering soldiers can suppress a recently reported enemy position after the enemy ducks, movers tolerate brief pauses in cover fire, and a casualty no longer ends the whole manoeuvre. Use -bbbFireManeuver 0 to disable it, or -bbbFireCoverOrders 0 to disable only the ordered covering fire.
+- Squads seek indoor cover near detected enemies and investigate further reachable positions when contacts are inside. Blocked routes are abandoned and player orders take priority. This is contact-driven movement, not a guarantee of clearing every room (-bbbBuildings 0 disables).
+- Soldiers use carried grenades against nearby enemies in cover, checking friendly clearance and the throwing route before committing. Squad cooldowns limit repeated throws (-bbbGrenades 0).
+- Idle or defending soldiers can walk to a nearby loaded friendly static weapon and crew it during contact. They give it up for orders, exhausted ammunition or a lost target (-bbbStaticWeapons 0).
+- Badly battered autonomous squads can withdraw in covered bounds; isolated, out-of-ammo survivors cornered by an enemy can surrender. Withdrawals stop if the squad cannot make real progress (-bbbMorale 0).
+
+### Keep each other alive
+
+- Tactical smoke screens casualty drags, advances and withdrawals toward known threat sectors (-bbbSmoke 0). Fixed medic smoke being skipped before the throw could happen.
+- Safer healing is now enabled by default (-bbbMedic 0 disables). Medics fight a nearby visible enemy before approaching a casualty, and casualty draggers let go to return fire against an immediate threat.
+- Medics no longer backtrack more than 75 m to a casualty during a fight. They can still go when the squad closes up or the fighting quiets down.
+- Suppressed soldiers caught without cover keep spotting and fighting back; soldiers in cover still keep their heads down (-bbbExposedFire 0).
+- Riflemen no longer permanently give up on jeeps and Humvees after their shots strike the hull. Only real armour triggers rifle-immunity handling. The get-low reaction now requires recently seen armour, while AT specialists retain their firing stance (-bbbArmourScatter 0).
+- Night illumination uses carried flare ammunition to light recently sighted enemy sectors, with squad and area cooldowns to limit repeated launches (-bbbFlares 0).
+
+### Crews, doors and squad cohesion
+
+- Supported armoured crew positions turn out after a quiet period and button up when danger returns (-bbbCrewTurnout 0).
+- Idle AI drivers can make a small, guarded adjustment to bring a gunner's visible target inside a limited turret arc. Player driving, movement orders and unsafe ground take priority (-bbbDriverAlign 0).
+- Against launcher fire, supported vehicles use fitted smoke weapons; slow wheeled vehicles can also make a short guarded reverse (-bbbArmorReaction 0).
+- Turret-linked commander seats count as crew, keeping their occupants aboard when passengers dismount under fire (-bbbCommanderCrew 0).
+- Soldiers stuck at a house door while trying to move can swing it fully open or flip it to the other side. Doors are never closed on anyone (-bbbDoorUnstick 0).
+- Squads use an awake member as their reference when their leader is knocked out. Soldiers bounding or withdrawing are no longer diverted to scavenge or crew static weapons.
+- Fixed a weapon-mode issue that let AI aim a very fast-firing weapon without ever firing. Parked AI drivers also release the horn.
+
+### See the decision, share the feedback
+
+- Hosts and mission makers can enable -bbbThink 1 and look at an AI soldier to see BBB's decisions and reasons for holding back. Use -bbbThink 2 to include the notes in the server log; the panel is off by default.
+- Bugs and ideas are welcome on Discord: https://discord.gg/WK8xGSztB. Use #issues for BBB bugs and #suggestions for ideas. GitHub Issues remain available.
 
 ## 0.1.4 — released
 

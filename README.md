@@ -44,8 +44,8 @@ recovery succeeds.
 
 ## Optional features and compatibility
 
-Medic smoke is enabled by default. The separate safer-healing behavior is off by
-default; server startup options include `-bbbMedicSmoke 0` to disable smoke and
+In Workshop 0.1.4, medic smoke is enabled by default. The separate safer-healing
+behavior is off by default; server startup options include `-bbbMedicSmoke 0` to disable smoke and
 `-bbbMedic 1` to enable safer healing. ACE is optional; ACE drag and other
 ACE-dependent behavior require ACE to be loaded. Experimental combat options
 remain opt-in.
@@ -53,23 +53,44 @@ remain opt-in.
 AC: Actual integrates through BBB's host hooks and manages its own commander,
 bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
 
-### Unreleased source options
+### Upcoming 0.1.5 options
 
-The source checkout also includes these experimental features. Each switch accepts `0` to disable its feature:
+The pending 0.1.5 release enables combat, medical and vehicle features by default.
+The optional Think panel remains off. These changes are in the source checkout;
+Workshop 0.1.4 keeps its existing behaviour until the update is published.
+Player control, explicit player/GM orders and host-mod policy take priority.
 
-- `-bbbArmorReaction 1`: AI crews react to launcher hits and nearby rocket passes. Supported fitted smoke weapons receive a short firing pulse; slow native wheeled vehicles can reverse with a small steering bias after checking clearance, terrain and water. Movement is bounded to 7 m, 6.5 seconds and 25 degrees. Player control, waypoints and host driving take priority. Tracked driving and custom smoke systems are not supported by this initial option.
-- `-bbbBuildings 1`: autonomous infantry near recently detected enemies enter native indoor cover, hold it, and can advance between up to three cover positions when the contact is inside the building. Uses native cover scoring and navigation, releases failed or stalled moves, and never teleports soldiers. Player control, waypoints, retreat and host policy take priority.
-- Night illumination (enabled by default; `-bbbFlares 0` disables): infantry use carried launcher or handheld flares in native low-light conditions to illuminate recently sighted enemy sectors. Player/GM orders and host policy take priority. Requests reserve a 120-second squad cooldown and a 90-second, 125 m shared area hold, including failed attempts. No ammunition is spawned.
-- `-bbbGrenades 1`: autonomous infantry squads deploy fragmentation hand grenades against perceived targets in cover or defilade within throwing range (10 to 35 m). Verifies friendly safety (>= 14 m clear of blast zone), throwing corridor clearance (2.5 m cylinder), and unobstructed trajectory, with a 25 s squad cooldown. Respects player/GM orders and player control.
-- `-bbbStaticWeapons 1`: autonomous infantry squads in contact detect nearby operational, loaded friendly static weapons or defensible turrets (<= 35 m) facing perceived enemy threats (traverse arc <= 60 deg). Assigns a fit foot soldier to crew the weapon, and automatically releases and dismounts when ordered on, the squad moves away, the area clears for 15 s, ammunition is exhausted, or the weapon is destroyed. Respects player/GM orders and player control.
-- `-bbbSmoke 1`: autonomous infantry squads deploy smoke grenades to screen casualty drags (`BBB_Drag`), bounding maneuver advances (`BBB_FireManeuver`), and retrograde break-contact withdrawals (`BBB_Morale`) directly toward perceived enemy threat sectors. Features spherical line-of-sight occlusion tracking (`BBB_Smoke.IsOccluded`), squad cooldowns, and strict safety guards respecting player control and orders.
-- `-bbbMorale 1`: autonomous infantry squads evaluate morale under heavy attrition (casualty ratio >= 50%, leader loss, sustained suppression). When morale breaks under contact, the squad conducts a retrograde bounding peel-back away from the threat centroid into rear cover until contact is broken. Isolated, out-of-ammo survivors cornered within 15 m enter a surrender posture rather than charging. Use `0` to disable; respects player/GM orders and host hooks.
-- `-bbbCrewTurnout 1`: armored AI crews use native turnout positions after 30 quiet seconds. Nearby known threats, incoming fire, suppression and vehicle hits keep them buttoned up. Only supported crew seats are used.
-- `-bbbDriverAlign 1`: an idle wheeled-vehicle driver may make a short forward steering adjustment for a stable target the gunner currently sees and can engage. It requires clear, level ground, yields to any waypoint or player/GM order, and leaves host-managed driving alone. The adjustment is limited to 2.5 m, 20 degrees and eight seconds, followed by a cooldown. It does not search for targets or firing lines.
+Server owners can disable features individually:
 
-Use `0` in place of `1` to disable either option. These source features are not in
-Workshop 0.1.4. Native tracked-vehicle driving, custom vehicle armor layouts and
-multiplayer visual acceptance require separate validation.
+| Option | What it disables |
+| --- | --- |
+| `-bbbFireManeuver 0` | Alternating covering fire and movement |
+| `-bbbFireCoverOrders 0` | Ordered covering fire alone; keeps the rest of fire and manoeuvre |
+| `-bbbCombatManeuver 0` | Combat repositioning |
+| `-bbbMedic 0` | Safer healing and casualty-aid decisions |
+| `-bbbMedicSmoke 0` | Smoke before approaching exposed casualties |
+| `-bbbSmoke 0` | Tactical smoke for drags, bounds and withdrawals |
+| `-bbbGrenades 0` | Autonomous fragmentation-grenade use |
+| `-bbbStaticWeapons 0` | Autonomous static-weapon crewing |
+| `-bbbMorale 0` | Morale-driven withdrawal and surrender |
+| `-bbbBuildings 0` | Contact-driven indoor cover movement |
+| `-bbbFlares 0` | BBB's autonomous night-illumination requests |
+| `-bbbDoorUnstick 0` | Opening or flipping doors that block movement |
+| `-bbbCrewTurnout 0` | Quiet-period crew turnout and danger-driven buttoning up |
+| `-bbbDriverAlign 0` | Small idle-driver adjustments for a gunner's visible target |
+| `-bbbArmorReaction 0` | Fitted smoke and guarded wheeled-vehicle reversal against launcher fire |
+| `-bbbCommanderCrew 0` | Treating turret-linked commander positions as crew |
+| `-bbbExposedFire 0` | Continued spotting and stronger return fire when suppressed without cover |
+
+Indoor movement uses native cover and navigation, abandons failed routes and does
+not guarantee every room is cleared. Grenades, smoke and flares use carried kit.
+Vehicle smoke needs supported fitted weapons. Driver alignment requires clear,
+level ground and is limited to 2.5 m, 20 degrees and eight seconds; armour reactions
+support a guarded short reverse for slow wheeled vehicles, not tracked driving.
+
+Hosts and mission makers can enable `-bbbThink 1` and look at a soldier to see BBB's
+decisions and reasons for holding back. `-bbbThink 2` also writes notes to the
+server log. Leave the option unset to keep it off.
 
 ## Reporting problems
 
