@@ -3,6 +3,10 @@
 ## 0.1.5 — unreleased
 
 - Every BBB feature is now on by default, including fire and manoeuvre, safer medic healing, grenades, smoke, morale, static weapons, building garrison, vehicle defence, crew turnout, driver alignment and flares. Each one still has its own server option to switch it off (`-bbbFireManeuver 0`, `-bbbMedic 0`, `-bbbCombatManeuver 0` and the options listed below).
+- Fire and manoeuvre now actually bounds: while one team moves, the other is ordered to keep firing on the enemy's last reported position, so the bound no longer stalls the moment the enemy ducks. Movers carry on through a short pause in covering fire, and the manoeuvre keeps going when a man is hit (`-bbbFireCoverOrders 0` turns the ordered covering fire off).
+- Squads no longer anchor on a knocked-out leader: an awake soldier takes over as the squad's reference point, so squads stop gathering round a body that can't move.
+- Medics in a fight no longer walk more than 75 m back to a casualty, so they don't leave their squad behind; when it's quiet, or the squad closes up, they still go.
+- Soldiers in the middle of a bound or a withdrawal are no longer sent off to loot bodies or man a static weapon.
 - Added doorway unsticking (`-bbbDoorUnstick 0` disables): a soldier who stands stuck next to a house door while trying to move gets that door swung fully open, or flipped to its other side. Doors are never closed on anyone.
 - Added autonomous night illumination (`-bbbFlares 0` disables): soldiers carrying flare ammunition illuminate recently sighted enemy sectors, with player/GM order vetoes and shared squad/area cooldowns to limit repeated launches.
 - AI pinned down in the open now fight back instead of freezing: a suppressed soldier with no cover keeps spotting enemies, shoots without the extra hesitation and fires faster and looser. In cover they still keep their heads down (`-bbbExposedFire 0` restores the old behaviour).
