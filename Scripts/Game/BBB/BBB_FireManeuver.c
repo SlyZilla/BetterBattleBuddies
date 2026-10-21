@@ -8,7 +8,7 @@ class BBB_FireTeamJob : Managed
  ref array<SCR_AIUtilityComponent> m_Members = {};
  ref array<SCR_AIUtilityComponent> m_Reached = {};
  int m_iCoverTeam, m_iPhase, m_iArrived;
- float m_fStarted, m_fPhaseSince, m_fCoverFire, m_fLog, m_fFresh;
+ float m_fStarted, m_fPhaseSince, m_fCoverFire, m_fLog, m_fFresh, m_fUnsupportedSince;
  bool m_bMoving;
 }
 
@@ -19,6 +19,16 @@ class BBB_FireManeuver
  static int s_iStarted, s_iSwaps, s_iRequests, s_iArrived, s_iNoCover, s_iCoverShots;
  static int s_iTicks, s_iTickMs, s_iTickMax, s_iDecisionMs, s_iEventMs;
  protected static bool s_bInTick;
+ // Live, the enemy ducks and vanilla stops shooting within seconds, so the old 3 s
+ // windows almost never opened a bound (20 Oct Everon: 31 starts, 2 bounds).
+ static const float COVER_FIRE_S = 6;      // covering gun counts as firing this long after a shot
+ static const float FRESH_S = 12;          // job keeps a contact this long after the last report
+ static const float SUPPRESS_FRESH_S = 8;  // commanded fire only on a report at most this old
+ static const float UNSUPPORTED_GRACE_S = 2.5; // movers keep going through a brief pause in cover fire
+ static const float COVER_ORDER_S = 6;     // one commanded burst window
+ static const float COVER_ORDER_PRIORITY = 90.5; // just above attacking a selected target (90)
+ static int s_iCoverOrders;
+ static bool s_bCoverOrders = true;
  protected static ref map<SCR_AIGroup, ref BBB_FireTeamJob> s_Jobs = new map<SCR_AIGroup, ref BBB_FireTeamJob>();
  protected static ref map<SCR_AIGroup, float> s_Next = new map<SCR_AIGroup, float>();
 
@@ -28,7 +38,9 @@ class BBB_FireManeuver
   s_bRead = true;
   string value;
   if (System.GetCLIParam("bbbFireManeuver", value)) s_bOn = value == "1";
-  PrintFormat("[BBB] FIRE MANEUVER enabled=%1", s_bOn);
+  // -bbbFireCoverOrders 0: no commanded covering fire (A/B; the wider windows stay).
+  if (System.GetCLIParam("bbbFireCoverOrders", value) && value == "0") s_bCoverOrders = false;
+  PrintFormat("[BBB] FIRE MANEUVER enabled=%1 coverOrders=%2", s_bOn, s_bCoverOrders);
  }
 
  // Resolve readiness from actual equipped native selection, not prefab names.
@@ -91,7 +103,7 @@ class BBB_FireManeuver
   if (!Ready(utility)) return false;
   BaseTarget target = utility.m_CombatComponent.GetCurrentTarget();
   SCR_AISuppressBehavior suppression = SCR_AISuppressBehavior.Cast(utility.GetCurrentBehavior());
-  if (suppression && suppression.m_SuppressionVolume.m_Value && GetGame().GetWorld().GetWorldTime() / 1000 - job.m_fFresh <= 6)
+  if (suppression && suppression.m_SuppressionVolume.m_Value && GetGame().GetWorld().GetWorldTime() / 1000 - job.m_fFresh <= SUPPRESS_FRESH_S)
    return vector.DistanceXZ(suppression.m_SuppressionVolume.m_Value.GetCenterPosition(), job.m_Threat) <= 70;
   if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.GetUnitType() != EAIUnitType.UnitType_Infantry || target.IsDisarmed() || target.GetTimeSinceDetected() > 10 || target.GetDistance() < 45 || target.GetDistance() > 300) return false;
   // A moving rifleman may lose his own sight briefly; covering guns still need
@@ -102,7 +114,7 @@ class BBB_FireManeuver
 
  protected static bool SuppressionCover(SCR_AIUtilityComponent utility, BBB_FireTeamJob job, float now)
  {
-  if (!Ready(utility) || now - job.m_fFresh > 3 || utility.m_fBBBLastFire < now - 3) return false;
+  if (!Ready(utility) || now - job.m_fFresh > SUPPRESS_FRESH_S || utility.m_fBBBLastFire < now - COVER_FIRE_S) return false;
   SCR_AISuppressBehavior action = SCR_AISuppressBehavior.Cast(utility.GetCurrentBehavior());
   return action && action.m_SuppressionVolume.m_Value && vector.DistanceXZ(action.m_SuppressionVolume.m_Value.GetCenterPosition(), job.m_Threat) <= 70;
  }
@@ -261,6 +273,7 @@ class BBB_FireManeuver
   bool coverMG;
   bool nextCoverFire, nextCoverMG;
   bool fresh;
+  vector freshAt;
   int alive;
   array<AIAgent> roster = {};
   BBB.s_Hooks.GetMembers(job.m_Group, roster);
@@ -289,8 +302,9 @@ class BBB_FireManeuver
    }
    vector known;
    vector report;
-   if (Detected(utility, report) && vector.DistanceXZ(report, job.m_Threat) <= 70) fresh = true;
+   if (Detected(utility, report) && vector.DistanceXZ(report, job.m_Threat) <= 70) { fresh = true; freshAt = report; }
    bool personallySeen = Fresh(utility, known);
+   utility.m_bBBBFireSees = personallySeen;
    bool visible = personallySeen || SuppressionCover(utility, job, now);
    if (!Known(utility, job)) continue;
    if (utility.m_iBBBFireTeam == job.m_iCoverTeam)
@@ -299,7 +313,7 @@ class BBB_FireManeuver
     {
      coverReady++;
      if (utility.m_CombatComponent.GetCurrentWeapon().GetWeaponType() == EWeaponType.WT_MACHINEGUN) coverMG = true;
-     if (utility.m_fBBBLastFire >= now - 3) job.m_fCoverFire = now;
+     if (utility.m_fBBBLastFire >= now - COVER_FIRE_S) job.m_fCoverFire = now;
     }
    }
    else if (vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), job.m_Center) < 60)
@@ -309,7 +323,7 @@ class BBB_FireManeuver
     {
      nextCoverReady++;
      if (utility.m_CombatComponent.GetCurrentWeapon().GetWeaponType() == EWeaponType.WT_MACHINEGUN) nextCoverMG = true;
-     if (utility.m_fBBBLastFire >= now - 3)
+     if (utility.m_fBBBLastFire >= now - COVER_FIRE_S)
      {
       nextCoverFire = true;
       if (job.m_Reached.Contains(utility) && vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), utility.m_vBBBFireDestination) <= 2.5) arrivedCoverFire = true;
@@ -317,8 +331,13 @@ class BBB_FireManeuver
     }
    }
   }
-  if (fresh) job.m_fFresh = now;
-  if (now - job.m_fFresh > 6 || alive < 3) { End(job.m_Group, now); return; }
+  // Follow the enemy as he is reported (only real native reports, within 70 m of the last).
+  if (fresh) { job.m_fFresh = now; job.m_Threat = freshAt; }
+  if (now - job.m_fFresh > FRESH_S || alive < 3) { End(job.m_Group, now); return; }
+  // Commanded covering fire: the leader has the covering team put rounds on the
+  // last reported position while the other team gets ready or bounds, instead of
+  // waiting for vanilla to happen to shoot.
+  if (job.m_bMoving || moveReady >= 2) OrderCoverFire(job, now);
   if ((System.IsCLIParam("acrBbbFireManeuverTest") || System.IsCLIParam("acrBbbFireManeuverProbeTest")) && now >= job.m_fLog)
   {
    PrintFormat("[BBB] FIRE STATE cover=%1 ready=%2 movers=%3 arrivals=%4 fireAge=%5 moving=%6", job.m_iCoverTeam, coverReady, moveReady, job.m_iArrived, now - job.m_fCoverFire, job.m_bMoving);
@@ -337,7 +356,7 @@ class BBB_FireManeuver
    }
    job.m_fLog = now + 5;
   }
-  bool supported = (coverReady >= 1) && job.m_fCoverFire > 0 && now - job.m_fCoverFire <= 3;
+  bool supported = (coverReady >= 1) && job.m_fCoverFire > 0 && now - job.m_fCoverFire <= COVER_FIRE_S;
   if (!job.m_bMoving && !supported && nextCoverReady >= 1 && nextCoverFire && (job.m_iArrived == 0 || arrivedCoverFire))
   {
    int reachedNext;
@@ -361,9 +380,11 @@ class BBB_FireManeuver
    foreach (SCR_AIUtilityComponent reserve : job.m_Members)
     if (reserve.m_iBBBFireTeam != job.m_iCoverTeam && Known(reserve, job)) moveReady++;
   }
-  if (job.m_bMoving && !supported)
+  if (supported) job.m_fUnsupportedSince = 0;
+  else if (job.m_fUnsupportedSince <= 0) job.m_fUnsupportedSince = now;
+  if (job.m_bMoving && !supported && now - job.m_fUnsupportedSince >= UNSUPPORTED_GRACE_S)
   {
-   // Loss of the covering guns immediately returns movers to native safety.
+   // Loss of the covering guns (not a reload or a moment's pause) returns movers to native safety.
    StopMoves(job);
    job.m_bMoving = false;
    job.m_iPhase++;
@@ -393,6 +414,38 @@ class BBB_FireManeuver
    job.m_fPhaseSince = now;
    s_iSwaps++;
    PrintFormat("[BBB] FIRE MANEUVER %1: roles switch, phase %2", BBB.s_Hooks.NameOf(job.m_Group), job.m_iPhase);
+  }
+ }
+
+ static bool CoversNow(SCR_AIUtilityComponent utility, BBB_FireTeamJob job)
+ {
+  if (utility.m_iBBBFireTeam == job.m_iCoverTeam) return true;
+  return job.m_bMoving && job.m_Reached.Contains(utility) && vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), utility.m_vBBBFireDestination) <= 2.5;
+ }
+
+ protected static void OrderCoverFire(BBB_FireTeamJob job, float now)
+ {
+  if (!s_bCoverOrders || now - job.m_fFresh > SUPPRESS_FRESH_S) return;
+  foreach (SCR_AIUtilityComponent utility : job.m_Members)
+  {
+   // The covering team, and movers who reached cover: they are the next covering guns.
+   if (!utility || now < utility.m_fBBBCoverOrderUntil || !CoversNow(utility, job)) continue;
+   if (!Ready(utility) || utility.m_CombatMoveState.IsMoving()) continue;
+   // A gun with its own visible enemy is already shooting at the real thing
+   // (sight sampled this tick in Update).
+   if (utility.m_bBBBFireSees) continue;
+   SCR_AICombatComponent combat = utility.m_CombatComponent;
+   if (combat.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) continue;
+   float distance = vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), job.m_Threat);
+   if (distance < 45 || distance > 300) continue;
+   vector aim = BBB.Ground(job.m_Threat);
+   float half = Math.Clamp(distance * 0.04, 4, 10);
+   SCR_AISuppressionVolumeBox volume = new SCR_AISuppressionVolumeBox(Vector(aim[0] - half, aim[1] - 1, aim[2] - half), Vector(aim[0] + half, aim[1] + 2.5, aim[2] + half));
+   BBB_AICoverFireBehavior burst = new BBB_AICoverFireBehavior(utility, null, volume, COVER_ORDER_S, 1.1);
+   burst.m_BBBJob = job;
+   utility.AddAction(burst);
+   utility.m_fBBBCoverOrderUntil = now + COVER_ORDER_S;
+   s_iCoverOrders++;
   }
  }
 
@@ -839,4 +892,36 @@ modded class SCR_AICombatMoveState
   }
   super.ApplyRequestChangeStanceOutsideCover(stance);
  }
+}
+
+// Covering fire the squad leader orders on the enemy's last reported position while
+// the other team bounds. Ends when its window is over, the man has his own visible
+// enemy, the job ends or he is no longer on the covering team.
+class BBB_AICoverFireBehavior : SCR_AISuppressBehavior
+{
+ BBB_FireTeamJob m_BBBJob;
+ protected float m_fEndMs;
+
+ void BBB_AICoverFireBehavior(SCR_AIUtilityComponent utility, SCR_AIActivityBase groupActivity, SCR_AISuppressionVolumeBase suppressionVolume, float suppressionDuration, float fireRate, float priorityLevel = PRIORITY_LEVEL_NORMAL)
+ {
+  m_fEndMs = GetGame().GetWorld().GetWorldTime() + suppressionDuration * 1000;
+  SetIsUniqueInActionQueue(true);
+ }
+
+ override float CustomEvaluate()
+ {
+  if (GetGame().GetWorld().GetWorldTime() > m_fEndMs || !m_Utility || !m_Utility.m_CombatComponent) { Complete(); return 0; }
+  if (!m_BBBJob || m_Utility.m_BBBFireJob != m_BBBJob || !BBB_FireManeuver.CoversNow(m_Utility, m_BBBJob)) { Complete(); return 0; }
+  if (!BBB.IsConscious(m_Utility.m_OwnerEntity) || BBB.PlayerOf(m_Utility.m_OwnerEntity) || BBB_OrderIntent.Blocks(m_Utility)) { Complete(); return 0; }
+  if (m_Utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) { Complete(); return 0; }
+  BaseTarget target = m_Utility.m_CombatComponent.GetCurrentTarget();
+  if (target && m_Utility.m_CombatComponent.IsTargetVisible(target)) { Complete(); return 0; }
+  return BBB_FireManeuver.COVER_ORDER_PRIORITY;
+ }
+}
+
+modded class SCR_AIUtilityComponent
+{
+ float m_fBBBCoverOrderUntil;
+ bool m_bBBBFireSees;
 }

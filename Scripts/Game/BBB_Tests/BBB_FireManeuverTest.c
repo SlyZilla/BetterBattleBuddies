@@ -11,7 +11,8 @@ class BBB_FireManeuverTest : BBB_AimTest
  protected float m_fEnd, m_fHook, m_fLog;
  protected int m_iFMRound, m_iFinished, m_iRequests, m_iArrivals, m_iSwaps;
  protected int m_iPass, m_iFail;
- protected bool m_bSaved, m_bGuards, m_bProbe, m_bDeletion, m_bLifecycle;
+ protected bool m_bSaved, m_bGuards, m_bProbe, m_bDeletion, m_bLifecycle, m_bDuck;
+ protected int m_iCoverOrders;
  protected ref map<IEntity, vector> m_Positions = new map<IEntity, vector>();
  protected float m_fMoverTravel, m_fCoverTravel;
  protected int m_iCoverFire;
@@ -23,9 +24,11 @@ class BBB_FireManeuverTest : BBB_AimTest
 
  static void MaybeStartFM()
  {
-  if (s_TestFM || !Replication.IsServer() || (!System.IsCLIParam("acrBbbFireManeuverTest") && !System.IsCLIParam("acrBbbFireManeuverProbeTest") && !System.IsCLIParam("acrBbbFireManeuverEastTest"))) return;
+  if (s_TestFM || !Replication.IsServer() || (!System.IsCLIParam("acrBbbFireManeuverTest") && !System.IsCLIParam("acrBbbFireManeuverProbeTest") && !System.IsCLIParam("acrBbbFireManeuverEastTest") && !System.IsCLIParam("acrBbbFireManeuverDuckTest"))) return;
   s_TestFM = new BBB_FireManeuverTest();
-  s_TestFM.m_bProbe = System.IsCLIParam("acrBbbFireManeuverProbeTest") || System.IsCLIParam("acrBbbFireManeuverEastTest");
+  s_TestFM.m_bProbe = System.IsCLIParam("acrBbbFireManeuverProbeTest") || System.IsCLIParam("acrBbbFireManeuverEastTest") || System.IsCLIParam("acrBbbFireManeuverDuckTest");
+  // Duck: the sentries pop up 3 s and lie prone 5 s, like a live enemy in cover.
+  s_TestFM.m_bDuck = System.IsCLIParam("acrBbbFireManeuverDuckTest");
   if (System.IsCLIParam("acrBbbFireManeuverEastTest")) s_TestFM.m_iFMRound = 2;
   GetGame().GetCallqueue().CallLater(s_TestFM.BeginFM, 10000);
  }
@@ -112,6 +115,7 @@ class BBB_FireManeuverTest : BBB_AimTest
   m_iArrivals = BBB_FireManeuver.s_iArrived;
   m_iSwaps = BBB_FireManeuver.s_iSwaps;
   m_iCoverFire = BBB_FireManeuver.s_iCoverShots;
+  m_iCoverOrders = BBB_FireManeuver.s_iCoverOrders;
   m_Positions.Clear();
   m_fMoverTravel = 0;
   m_fCoverTravel = 0;
@@ -176,7 +180,9 @@ class BBB_FireManeuverTest : BBB_AimTest
   {
    ChimeraCharacter fixedTarget = ChimeraCharacter.Cast(sentryBody);
    if (!fixedTarget) continue;
-   SCR_AIStanceHandling.SetStance(fixedTarget.GetCharacterController(), ECharacterStance.STAND);
+   ECharacterStance sentryStance = ECharacterStance.STAND;
+   if (m_bDuck && Now() - Math.Floor(Now() / 8) * 8 >= 3) sentryStance = ECharacterStance.PRONE;
+   SCR_AIStanceHandling.SetStance(fixedTarget.GetCharacterController(), sentryStance);
    AIControlComponent sentryControl = AIControlComponent.Cast(sentryBody.FindComponent(AIControlComponent));
    if (!sentryControl || !sentryControl.GetAIAgent()) continue;
    SCR_AIUtilityComponent sentryUtility = SCR_AIUtilityComponent.Cast(sentryControl.GetAIAgent().FindComponent(SCR_AIUtilityComponent));
@@ -219,6 +225,8 @@ class BBB_FireManeuverTest : BBB_AimTest
    CheckFM("validated cover bounds completed", BBB_FireManeuver.s_iArrived > m_iArrivals);
    CheckFM("covering team fired while movers travelled", BBB_FireManeuver.s_iCoverShots > m_iCoverFire && m_fMoverTravel > 3);
    CheckFM("fireteams switched roles after reaching cover", BBB_FireManeuver.s_iSwaps > m_iSwaps);
+   if (m_bDuck) CheckFM("leader ordered covering fire on the ducked enemy", BBB_FireManeuver.s_iCoverOrders > m_iCoverOrders);
+   PrintFormat("[BBB] FIRETEST orders round=%1 coverOrders=%2 coverShots=%3 arrivals=%4 swaps=%5", m_iFMRound, BBB_FireManeuver.s_iCoverOrders - m_iCoverOrders, BBB_FireManeuver.s_iCoverShots - m_iCoverFire, BBB_FireManeuver.s_iArrived - m_iArrivals, BBB_FireManeuver.s_iSwaps - m_iSwaps);
    PrintFormat("[BBB] FIRETEST travel round=%1 movers=%2 cover=%3 (sum of 0.5 s native displacements)", m_iFMRound, m_fMoverTravel, m_fCoverTravel);
   }
   else CheckFM("off switch produces no coordinated requests", BBB_FireManeuver.s_iRequests == m_iRequests);
@@ -416,6 +424,7 @@ class BBB_FireManeuverTest : BBB_AimTest
   int expected = 34;
   int rounds = 4;
   if (m_bProbe) { expected = 26; rounds = 1; }
+  if (m_bDuck) expected = 27;
   if (!reason.IsEmpty() || m_iFinished != rounds || m_iFail > 0 || m_iPass != expected) verdict = "FAIL";
   PrintFormat("[BBB] FIRETEST results shots=%1 losses=%2 (two pairs are coverage, not a survival benefit claim)", m_Shots, m_Losses);
   PrintFormat("[ACR] VERDICT %1 test=bbbfiremaneuver passed=%2 failed=%3 expected=%4 rounds=%5 reason=%6", verdict, m_iPass, m_iFail, expected, m_iFinished, reason);
