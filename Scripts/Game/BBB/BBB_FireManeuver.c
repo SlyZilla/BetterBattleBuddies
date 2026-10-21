@@ -266,7 +266,7 @@ class BBB_FireManeuver
   BBB.s_Hooks.GetMembers(job.m_Group, roster);
   // A man killed, knocked out or taken off the squad drops out; the rest fight on
   // (one casualty used to end the whole manoeuvre and bench the squad for 15 s).
-  if (DropLost(job, roster) && !TeamsHold(job)) { if (System.IsCLIParam("acrBbbFireManeuverTest")) Print("[BBB] FIRE END too few left"); End(job.m_Group, now); return; }
+  if (DropLost(job, roster) && !TeamsHold(job)) { PrintFormat("[BBB] FIRE END %1: too few left (%2)", BBB.s_Hooks.NameOf(job.m_Group), job.m_Members.Count()); End(job.m_Group, now); return; }
   foreach (SCR_AIUtilityComponent utility : job.m_Members)
   {
    alive++;
@@ -679,7 +679,7 @@ class BBB_FireManeuver
    job.m_Members.RemoveOrdered(i);
    s_iDropped++;
    dropped = true;
-   if (System.IsCLIParam("acrBbbFireManeuverTest")) PrintFormat("[BBB] FIRE DROP member out, %1 left", job.m_Members.Count());
+   PrintFormat("[BBB] FIRE DROP %1: member out, %2 left", BBB.s_Hooks.NameOf(job.m_Group), job.m_Members.Count());
   }
   return dropped;
  }
