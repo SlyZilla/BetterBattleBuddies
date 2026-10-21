@@ -261,6 +261,7 @@ class BBB_FireManeuver
   s_Jobs.Set(group, job);
   s_iStarted++;
   PrintFormat("[BBB] FIRE MANEUVER %1: %2 + %3, MG cover=%4", BBB.s_Hooks.NameOf(group), job.m_Members.Count() / 2, job.m_Members.Count() - job.m_Members.Count() / 2, mg != null);
+  BBB_Think.NoteGroup(group, "FireManeuver", "starts fire and manoeuvre");
   return job;
  }
 
@@ -395,6 +396,7 @@ class BBB_FireManeuver
    job.m_bMoving = true;
    job.m_fPhaseSince = now;
    PrintFormat("[BBB] FIRE MANEUVER %1: team %2 covers, team %3 bounds", BBB.s_Hooks.NameOf(job.m_Group), job.m_iCoverTeam, 1 - job.m_iCoverTeam);
+   BBB_Think.NoteGroup(job.m_Group, "FireManeuver", "team " + job.m_iCoverTeam + " covers, team " + (1 - job.m_iCoverTeam) + " bounds");
   }
   if (job.m_bMoving && now - job.m_fPhaseSince >= 10)
   {
@@ -446,6 +448,7 @@ class BBB_FireManeuver
    utility.AddAction(burst);
    utility.m_fBBBCoverOrderUntil = now + COVER_ORDER_S;
    s_iCoverOrders++;
+   BBB_Think.NoteUtility(utility, "FireManeuver", "ordered to cover the bound: fire on the last reported enemy " + Math.Round(distance) + " m away");
   }
  }
 
@@ -617,6 +620,7 @@ class BBB_FireManeuver
   utility.m_bBBBFireDestination = true;
   if (physicalCover) BBB_Perf.Count("fireManeuver.coverMoves");
   PrintFormat("[BBB] FIRE BOUND team=%1 phase=%2 destination=%3 cover=%4", utility.m_iBBBFireTeam, utility.m_iBBBFirePhase, position, physicalCover);
+  BBB_Think.NoteUtility(utility, "FireManeuver", "bounds " + Math.Round(vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), position)) + " m (team " + utility.m_iBBBFireTeam + ", cover " + physicalCover + ")");
   if (utility.m_BBBFireJob)
   {
    array<SCR_AIUtilityComponent> coveringMembers = {};

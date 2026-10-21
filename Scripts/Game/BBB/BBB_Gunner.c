@@ -103,6 +103,7 @@ class BBB_Gunner
   s_iDrills++;
   BBB_Perf.Count("gunner.drill");
   PrintFormat("[BBB] GUNNER drill: fire %1 m away, bursts into %2 (%3, %4 m off)", Math.Round(distance), aim, source, Math.Round(vector.DistanceXZ(aim, heard)));
+  BBB_Think.NoteUtility(utility, "Gunner", "bursts at where fire came from, " + Math.Round(distance) + " m (" + source + ")");
  }
 
  // Where he thinks it came from: the heard origin turned by a bearing error, at a range

@@ -406,6 +406,7 @@ class BBB_Morale
 		if (contactBroken) s_iContactsBroken++;
 		PrintFormat("[BBB] MORALE: Squad %1 ended withdrawal (%2, contact broken=%3, withdrawn=%4 m, threat dist=%5 m)",
 			BBB.s_Hooks.NameOf(state.m_Group), reason, contactBroken, Math.Round(state.m_fTotalWithdrawn), Math.Round(threatDist));
+			BBB_Think.NoteGroup(state.m_Group, "Morale", "withdrawal ended: " + reason);
 	}
 
 	protected static void StartWithdrawal(BBB_GroupMoraleState state, vector threatCenter, float now)
@@ -428,6 +429,7 @@ class BBB_Morale
 		s_iWithdrawalsStarted++;
 		PrintFormat("[BBB] MORALE: Squad %1 morale broke (score=%2, initial=%3), withdrawing away from %4 to %5",
 			BBB.s_Hooks.NameOf(state.m_Group), state.m_fMorale, state.m_iInitialCount, threatCenter, state.m_vWithdrawPos);
+			BBB_Think.NoteGroup(state.m_Group, "Morale", "MORALE BROKE (score " + state.m_fMorale.ToString(4, 2) + "): withdrawing");
 
 		ExecuteBoundingPhase(state);
 	}
@@ -669,6 +671,7 @@ class BBB_Morale
 		s_iSurrenders++;
 		PrintFormat("[BBB] MORALE: Soldier %1 surrendered (out of ammo, suppressed, enemy within %2 m)",
 			soldier, SURRENDER_DIST_MAX);
+			BBB_Think.Note(soldier, "Morale", "SURRENDERS: out of ammo, suppressed, enemy close");
 	}
 
 	// ---------------------------------------------------------------- main tick

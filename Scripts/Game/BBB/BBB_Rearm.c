@@ -364,6 +364,7 @@ class BBB_Rearm
    string gName = "group";
    if (group) gName = BBB.s_Hooks.NameOf(group);
    PrintFormat("[BBB] REARM %1: %2 looted from corpse (mags=%3 at=%4)", gName, soldier, magsMoved, atMoved);
+   BBB_Think.Note(soldier, "Rearm", "looted a body: " + magsMoved + " mags, " + atMoved + " AT");
    return true;
   }
   return false;

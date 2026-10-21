@@ -46,6 +46,7 @@ modded class SCR_AICombatComponent
 		if (!perceptionComp || !BBB_ExposedFire.Exposed(m_Utility)) return;
 		m_fBBBExposedPerception = BBB_ExposedFire.ALERTED_PERCEPTION * m_fEquipmentPerceptionFactor * m_fPerceptionFactor;
 		perceptionComp.SetPerceptionFactor(m_fBBBExposedPerception);
+		BBB_Think.NoteUtility(m_Utility, "ExposedFire", "pinned in the open: keeps alert eyes, fires faster");
 	}
 }
 

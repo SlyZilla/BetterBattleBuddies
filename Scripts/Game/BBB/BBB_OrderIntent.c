@@ -2,7 +2,15 @@
 // A temporary danger/attack behavior must not hide an unfinished player order.
 class BBB_OrderIntent
 {
+ // A BBB feature asks before acting (noted for the BBB_Think panel when it holds back).
  static bool Blocks(SCR_AIUtilityComponent utility)
+ {
+  if (!Held(utility)) return false;
+  BBB_Think.NoteUtility(utility, "Orders", "player/GM order active: BBB stands back");
+  return true;
+ }
+
+ static bool Held(SCR_AIUtilityComponent utility)
  {
   if (!utility) return false;
   SCR_AIBehaviorBase current = utility.GetCurrentBehavior();

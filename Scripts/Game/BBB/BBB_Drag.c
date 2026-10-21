@@ -246,6 +246,7 @@ class BBB_Drag
   {
    s_iNoSpot++;
    PrintFormat("[BBB] DRAG %1 -> %2: no cover spot (%3 enemies known), treating in place", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), enemies.Count());
+   BBB_Think.Note(healer, "Drag", "no cover spot for " + BBB_Medic.Name(casualty) + ", treats him in place");
    return false;
   }
   bool carry = threat < ALERTED && Nearest(casualty.GetOrigin(), enemies) > DRAG_ENEMY_M;
@@ -263,6 +264,7 @@ class BBB_Drag
   s_mRefusedLog.Set(casualty, now);
   StartTicking();
   PrintFormat("[BBB] DRAG %1 -> %2: not dragging, %3", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), why);
+  BBB_Think.Note(healer, "Drag", "not dragging " + BBB_Medic.Name(casualty) + ": " + why);
  }
 
  // Enemies the healer's group saw or heard lately (last known spots).
@@ -392,6 +394,7 @@ class BBB_Drag
   string how = "drags";
   if (carry) how = "carries";
   PrintFormat("[BBB] DRAG %1 %2 %3 %4 m to cover", BBB_Medic.Name(healer), how, BBB_Medic.Name(casualty), Math.Round(distance));
+  BBB_Think.Note(healer, "Drag", how + " " + BBB_Medic.Name(casualty) + " " + Math.Round(distance) + " m to cover");
   BBB_Smoke.DeployForDrag(healer, casualty, spot);
   StartTicking();
  }
@@ -491,6 +494,7 @@ class BBB_Drag
   if (GetGame() && GetGame().GetWorld()) seconds = (NowMs() - job.m_fStartMs) / 1000;
   if (job.m_Healer) distance = vector.DistanceXZ(job.m_Healer.GetOrigin(), job.m_vSpot);
   PrintFormat("[BBB] DRAG %1 with %2: %3 after %4 s, %5 m from the spot", BBB_Medic.Name(job.m_Healer), BBB_Medic.Name(job.m_Casualty), why, Math.Round(seconds), Math.Round(distance));
+  BBB_Think.Note(job.m_Healer, "Drag", "drag of " + BBB_Medic.Name(job.m_Casualty) + " ended: " + why);
  }
 }
 

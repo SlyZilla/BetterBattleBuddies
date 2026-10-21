@@ -314,6 +314,7 @@ class BBB_Combat
 		int groupId = -1;
 		if (group) groupId = group.GetGroupID();
 		PrintFormat("[BBB] COMBAT return fire: group %1, %2 m toward ground contact %3 (%4 s old)", groupId, Math.Round(distance), aim, Math.Round(age));
+		BBB_Think.NoteUtility(utility, "Combat", "returns fire at a ground contact " + Math.Round(distance) + " m away (" + Math.Round(age) + " s old)");
 	}
 
 	static bool OnGround(vector position)

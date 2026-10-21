@@ -346,6 +346,7 @@ class BBB_Smoke
 
 		PrintFormat("[BBB] SMOKE: %1 (%2) deployed smoke to %3 (reason=%4, threatDist=%5 m)",
 			thrower, BBB.s_Hooks.NameOf(group), smokePos, reason, Math.Round(threatDist));
+			BBB_Think.Note(thrower, "Smoke", "throws smoke (" + reason + ", threat " + Math.Round(threatDist) + " m)");
 		return true;
 	}
 

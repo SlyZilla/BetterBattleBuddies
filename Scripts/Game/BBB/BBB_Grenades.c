@@ -343,6 +343,7 @@ class BBB_Grenades
 		float throwDist = vector.DistanceXZ(thrower.GetOrigin(), landingPos);
 		PrintFormat("[BBB] GRENADE: %1 (%2) threw frag grenade at %3 (dist=%4m, reason=%5)",
 			thrower, BBB.s_Hooks.NameOf(group), landingPos, Math.Round(throwDist), reason);
+			BBB_Think.Note(thrower, "Grenades", "throws a frag " + Math.Round(throwDist) + " m (" + reason + ")");
 		return true;
 	}
 

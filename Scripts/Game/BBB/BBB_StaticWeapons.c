@@ -444,6 +444,7 @@ class BBB_StaticWeapons
 		s_iBoardingRequests++;
 		PrintFormat("[BBB] STATIC: %1 (%2) heading for static weapon %3 (%4 m)",
 			gunner, BBB.s_Hooks.NameOf(group), weapon, Math.Round(vector.Distance(gunner.GetOrigin(), weapon.GetOrigin())));
+			BBB_Think.Note(gunner, "Static", "heads for a static weapon " + Math.Round(vector.Distance(gunner.GetOrigin(), weapon.GetOrigin())) + " m away");
 		return true;
 	}
 
@@ -467,6 +468,7 @@ class BBB_StaticWeapons
 		s_iBoardingsCancelled++;
 		if (job.m_StaticWeapon) s_mWeaponRetry.Set(job.m_StaticWeapon, GetGame().GetWorld().GetWorldTime() + WEAPON_RETRY_MS);
 		PrintFormat("[BBB] STATIC: %1 boarding of %2 cancelled (reason=%3)", job.m_Gunner, job.m_StaticWeapon, reason);
+		BBB_Think.Note(job.m_Gunner, "Static", "boarding cancelled: " + reason);
 	}
 
 	// Release a seated gunner back to his squad with vanilla's get-out behaviour.
@@ -499,6 +501,7 @@ class BBB_StaticWeapons
 
 		PrintFormat("[BBB] STATIC: %1 released static weapon %2 (reason=%3)",
 			job.m_Gunner, job.m_StaticWeapon, reason);
+		BBB_Think.Note(job.m_Gunner, "Static", "released the static weapon: " + reason);
 	}
 
 	protected static void ForceOutIfStillSeated(ChimeraCharacter gunner, BaseCompartmentSlot slot)
@@ -588,6 +591,7 @@ class BBB_StaticWeapons
 					s_iWeaponsCrewed++;
 					PrintFormat("[BBB] STATIC: %1 (%2) crewing static weapon %3 after %4 s",
 						job.m_Gunner, BBB.s_Hooks.NameOf(job.m_Group), job.m_StaticWeapon, Math.Round((nowMs - job.m_fRequestedMs) / 1000.0));
+						BBB_Think.Note(job.m_Gunner, "Static", "crewing a static weapon");
 				}
 				else
 				{
@@ -624,6 +628,7 @@ class BBB_StaticWeapons
 				{
 					s_iWeaponsReleased++;
 					PrintFormat("[BBB] STATIC: %1 left static weapon %2 on his own", job.m_Gunner, job.m_StaticWeapon);
+					BBB_Think.Note(job.m_Gunner, "Static", "left the static weapon on his own");
 					s_aJobs.RemoveOrdered(j);
 				}
 				continue;

@@ -74,6 +74,7 @@ class BBB
   BBB_Buildings.Read();
   BBB_ArmorReaction.Read();
   BBB_ExposedFire.Read();
+  BBB_Think.Read();
   BBB_DoorUnstick.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
@@ -105,6 +106,7 @@ class BBB
   BBB_Flares.Stop();
   BBB_Buildings.Stop();
   BBB_ArmorReaction.Stop();
+  BBB_Think.Stop();
   BBB_DoorUnstick.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
@@ -158,6 +160,7 @@ class BBB
   t = BBB_Perf.Lap("tick.armorReaction", t);
   BBB_DoorUnstick.Tick();
   t = BBB_Perf.Lap("tick.doorUnstick", t);
+  BBB_Think.Tick();
 		BBB_Perf.OnTick();
  }
 
@@ -176,6 +179,7 @@ class BBB
   BBB_ArmorReaction.Frame();
   BBB_Perf.Add("frame.armorReaction", System.GetTickCount() - armorStarted);
   BBB_DriverAlignment.Frame();
+  BBB_Think.Frame();
  }
 
  // ---------------------------------------------------------------- helpers

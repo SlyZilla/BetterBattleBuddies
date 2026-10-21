@@ -740,6 +740,7 @@ class BBB_VehicleHelpers : Managed
   if (hasGunner && BBB_Transport.CrewedVehicle(group) == vehicle) return;
   if (DismountGroupFromVehicle(group, vehicle, hasGunner) > 0)
    PrintFormat("[BBB] TACTICS %1: tactical dismount under fire", BBB.s_Hooks.NameOf(group));
+   BBB_Think.NoteGroup(group, "Vehicle", "tactical dismount under fire");
  }
 
  protected void ClearStallState(IEntity vehicle)
@@ -780,6 +781,7 @@ class BBB_VehicleHelpers : Managed
   {
    if (DismountGroupFromVehicle(group, vehicle, false) > 0)
     PrintFormat("[BBB] DRIVE %1: driver lost under fire, crew bails out", BBB.s_Hooks.NameOf(group));
+    BBB_Think.NoteGroup(group, "Vehicle", "driver lost under fire: crew bails out");
    ClearStallState(vehicle);
    return;
   }
@@ -815,6 +817,7 @@ class BBB_VehicleHelpers : Managed
   {
    if (DismountGroupFromVehicle(group, vehicle, false) > 0)
     PrintFormat("[BBB] DRIVE %1: stopped under fire (unarmed), crew bails out", BBB.s_Hooks.NameOf(group));
+    BBB_Think.NoteGroup(group, "Vehicle", "stopped under fire (unarmed): crew bails out");
    ClearStallState(vehicle);
    return;
   }
@@ -833,6 +836,7 @@ class BBB_VehicleHelpers : Managed
   if (!m_UnstickListener) m_UnstickListener = new BBB_VehicleHelpersUnstick(this);
   BBB_Unstick.Begin(vehicle, driver, steer, m_UnstickListener);
   PrintFormat("[BBB] DRIVE %1: stuck, backing up (try %2)", BBB.s_Hooks.NameOf(group), tries);
+  BBB_Think.NoteGroup(group, "Vehicle", "stuck, backing up (try " + tries + ")");
  }
 }
 

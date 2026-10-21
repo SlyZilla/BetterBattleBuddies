@@ -628,6 +628,7 @@ modded class SCR_AICombatComponent
   BBB_Armour.s_iSteered++;
   BBB_Perf.Count("armour.steer");
   PrintFormat("[BBB] ARMOUR %1: his %2 can't hurt %3; looks for other targets", BBB_Armour.Short(BBB_Armour.PrefabKey(GetOwner())), BBB_Armour.Short(BBB_Armour.Key(m_SelectedMagazineComp.GetAmmoType(0))), BBB_Armour.Short(BBB_Armour.PrefabKey(BBB_Armour.VehicleOf(target.GetTargetEntity()))));
+  BBB_Think.Note(GetOwner(), "Armour", "his rounds can't hurt " + BBB_Armour.Short(BBB_Armour.PrefabKey(BBB_Armour.VehicleOf(target.GetTargetEntity()))) + ": picks other targets for a while");
  }
 
  protected void BBBRestoreScore()
@@ -655,6 +656,7 @@ modded class SCR_AIAttackBehavior
    bool was = m_bBBBUseless;
    m_bBBBUseless = BBB_Armour.Useless(m_Target.m_Value, m_CombatComponent.BBBSelectedMagazine()) && BBB_Armour.On(m_Utility.m_OwnerEntity);
    if (m_bBBBUseless && !was) { BBB_Armour.s_iHeld++; BBB_Perf.Count("armour.hold"); }
+   if (m_bBBBUseless != was && m_Target.m_Value) { if (m_bBBBUseless) BBB_Think.NoteUtility(m_Utility, "Armour", "HOLDS FIRE at " + BBB_Armour.Short(BBB_Armour.PrefabKey(BBB_Armour.VehicleOf(m_Target.m_Value.GetTargetEntity()))) + ": his rounds are known not to hurt it"); else BBB_Think.NoteUtility(m_Utility, "Armour", "attack allowed again"); }
   }
   if (m_bBBBUseless) return 0;
   return priority;
@@ -688,6 +690,7 @@ modded class SCR_AISuppressGroupClusterBehavior
      if (!BBB_Armour.UselessEntity(entity, magazine)) { m_bBBBUseless = false; break; }
    }
    if (m_bBBBUseless && !was) { BBB_Armour.s_iHeld++; BBB_Perf.Count("armour.holdsuppress"); }
+   if (m_bBBBUseless && !was) BBB_Think.NoteUtility(m_Utility, "Armour", "HOLDS suppressive fire: every target in the cluster is armour his rounds can't hurt");
   }
   if (m_bBBBUseless) return 0;
   return priority;

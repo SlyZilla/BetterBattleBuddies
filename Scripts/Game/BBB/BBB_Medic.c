@@ -428,6 +428,7 @@ class BBB_Medic
   s_mHot.Set(casualty, NowMs());
   StartWatching();
   PrintFormat("[BBB] MEDIC healer %1 hit on his way to %2: nobody goes there for %3 s", Name(healer), Name(casualty), HOT_S);
+  BBB_Think.Note(healer, "Medic", "hit on his way to " + Name(casualty) + ": nobody goes there for a while");
  }
 
  static void MarkHeld(IEntity casualty)
@@ -580,6 +581,7 @@ modded class SCR_AIMedicHealBehavior
   if ((fullOn || smokeOn) && EvaluatePriorityLevel() < PRIORITY_LEVEL_GAMEMASTER && BBB_Medic.FightFirst(m_Utility))
   {
    if (m_iBBBDecision != BBB_Medic.HOLD_FIGHTING) PrintFormat("[BBB] MEDIC %1 -> %2: %3", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), BBB_Medic.Reason(BBB_Medic.HOLD_FIGHTING));
+   if (m_iBBBDecision != BBB_Medic.HOLD_FIGHTING) BBB_Think.Note(healer, "Medic", BBB_Medic.Name(casualty) + ": " + BBB_Medic.Reason(BBB_Medic.HOLD_FIGHTING));
    m_iBBBDecision = BBB_Medic.HOLD_FIGHTING;
    BBB_Medic.MarkGoing(healer, null);
    BBB_Medic.MarkHeld(casualty);
@@ -623,6 +625,7 @@ modded class SCR_AIMedicHealBehavior
    else if (smoking)
     decision = BBB_Medic.HOLD_SMOKING;
    if (decision != m_iBBBDecision) PrintFormat("[BBB] MEDIC %1 -> %2 at %3 m: %4", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), Math.Round(distance), BBB_Medic.Reason(decision));
+   if (decision != m_iBBBDecision) BBB_Think.Note(healer, "Medic", BBB_Medic.Name(casualty) + " at " + Math.Round(distance) + " m: " + BBB_Medic.Reason(decision));
    m_iBBBDecision = decision;
   }
   if (m_iBBBDecision == BBB_Medic.GO)

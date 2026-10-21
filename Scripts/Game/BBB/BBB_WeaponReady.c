@@ -85,6 +85,7 @@ class BBB_WeaponReady
 		string weaponName = chosen.GetOwner().ClassName();
 		if (chosen.GetOwner().GetPrefabData()) weaponName = FilePath.StripPath(chosen.GetOwner().GetPrefabData().GetPrefabName());
 		PrintFormat("[BBB] WEAPON READY %1 equips %2 accepted=%3", BBB.s_Hooks.NameOf(SCR_AIGroup.Cast(agent.GetParentGroup())), weaponName, accepted);
+		BBB_Think.NoteAgent(agent, "WeaponReady", "draws " + weaponName);
 	}
 }
 
