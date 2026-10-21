@@ -73,14 +73,17 @@ multiplayer visual acceptance require separate validation.
 
 ## Reporting problems
 
-**[Report a bug](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=01-bug-report.yml)**
+Report in **[Discord](https://discord.gg/WK8xGSztB)** under **#issues** (choose **BBB**),
+or post ideas in **#suggestions**. No GitHub account needed. Search existing Discord posts first.
+
+Prefer GitHub? **[Report a bug](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=01-bug-report.yml)**
 or **[suggest a feature](https://github.com/propst-design/BetterBattleBuddies/issues/new?template=02-feature-request.yml)**.
 Search [existing issues](https://github.com/propst-design/BetterBattleBuddies/issues?q=is%3Aissue)
 first; add details to an existing report when it describes the same problem.
 
-The bug report form asks for BBB/game versions, platform, scenario, other mods,
+For either route, include BBB/game versions, platform, scenario, other mods,
 hosting/joining context, steps to reproduce, expected behavior and actual behavior.
-Report one problem per issue. Testing with only BBB and the base game helps isolate
+Report one problem per post or issue. Testing with only BBB and the base game helps isolate
 conflicts, but is optional.
 
 Attach `console.log` and `script.log` from the affected session when available.

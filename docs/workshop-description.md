@@ -40,8 +40,10 @@ BBB works through Reforger's AI: terrain, pathfinding, equipment and current ord
 SOURCE, GUIDE AND FEEDBACK
 
 Public GitHub: https://github.com/propst-design/BetterBattleBuddies
-Read the README for setup and compatibility, browse the source, or report bugs and request features:
-https://github.com/propst-design/BetterBattleBuddies/issues
+Read the README for setup and compatibility.
+Discord reports and ideas: https://discord.gg/WK8xGSztB
+Use #issues for bugs (choose BBB), #suggestions for ideas. No GitHub account needed.
+GitHub alternative: https://github.com/propst-design/BetterBattleBuddies/issues
 
 When reporting a problem, include versions, scenario, other mods, host/client role, steps and expected behavior. Attach the affected console.log and script.log; normal game logs are under Documents\My Games\ArmaReforger\logs, with custom profiles/server setups using their configured location. Multiplayer reports benefit from both server and affected client logs.
 
