@@ -29,7 +29,7 @@ More initiative under fire, with your orders still in charge. This update enable
 - Turret-linked commander seats count as crew, keeping their occupants aboard when passengers dismount under fire (-bbbCommanderCrew 0).
 - Soldiers stuck at a house door while trying to move can swing it fully open or flip it to the other side. Doors are never closed on anyone (-bbbDoorUnstick 0).
 - Squads use an awake member as their reference when their leader is knocked out. Soldiers bounding or withdrawing are no longer diverted to scavenge or crew static weapons.
-- Fixed a weapon-mode issue that let AI aim a very fast-firing weapon without ever firing. Parked AI drivers also release the horn.
+- Fixed a weapon-mode issue that let AI aim a very fast-firing weapon without ever firing.
 
 ### See the decision, share the feedback
 
