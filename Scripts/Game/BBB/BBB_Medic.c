@@ -47,6 +47,11 @@ class BBB_Medic
  // (pinned) line. The second test (3 Oct) held from "alerted" (0.33): a healer 100 m from
  // the enemy stayed above it the whole fight and never went.
  static const float THREAT_HOLD = 0.66;
+ // In a fight (alerted or worse) a healer doesn't walk farther back than this: on 20 Oct
+ // full mode sent healers 56-205 m back (median 67 m), stringing the squad out. Calm, or
+ // once the squad closes up, he still goes.
+ static const float TOO_FAR_M = 75;
+ static const float FIGHT_THREAT = 0.33;
 
  // Why a heal is held (0 = go).
  static const int GO = 0;
@@ -56,6 +61,7 @@ class BBB_Medic
  static const int HOLD_HOT = 4;
  static const int HOLD_SMOKING = 5;
  static const int HOLD_FIGHTING = 6; // his own visible enemy within FIGHT_FIRST_M
+ static const int HOLD_TOO_FAR = 7;
 
  static bool s_bSmokeOn = true;
  static const float SMOKE_BLOOM_MS = 4000;
@@ -157,6 +163,7 @@ class BBB_Medic
   if (smoking) return HOLD_SMOKING;
   if (bleeding) return HOLD_BLEEDING;
   if (threat >= THREAT_HOLD) return HOLD_SUPPRESSED;
+  if (distance > TOO_FAR_M && threat >= FIGHT_THREAT) return HOLD_TOO_FAR;
   if (hot) return HOLD_HOT;
   if (exposed && distance > DASH_M) return HOLD_ENEMY;
   return GO;
@@ -172,6 +179,7 @@ class BBB_Medic
    case HOLD_HOT: return "a healer was hit going there";
    case HOLD_SMOKING: return "waiting for smoke screen to bloom";
    case HOLD_FIGHTING: return "fighting an enemy in view first";
+   case HOLD_TOO_FAR: return "casualty too far behind during the fight";
   }
   return "go";
  }

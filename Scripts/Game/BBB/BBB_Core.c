@@ -193,6 +193,13 @@ class BBB
   return character && character.GetCharacterController() && !character.GetCharacterController().IsDead();
  }
 
+ // Alive and awake: a downed soldier can't lead, walk or regroup.
+ static bool IsConscious(IEntity entity)
+ {
+  if (!IsAlive(entity)) return false;
+  return !ChimeraCharacter.Cast(entity).GetCharacterController().IsUnconscious();
+ }
+
  // The player controlling this entity (0: nobody).
  static int PlayerOf(IEntity entity)
  {
@@ -238,12 +245,16 @@ class BBB
  static IEntity AnchorOf(SCR_AIGroup group)
  {
   if (!group) return null;
+  // An unconscious leader left behind must not anchor the squad: prefer anyone awake.
   AIAgent leader = group.GetLeaderAgent();
-  if (leader && IsAlive(leader.GetControlledEntity())) return leader.GetControlledEntity();
+  if (leader && IsConscious(leader.GetControlledEntity())) return leader.GetControlledEntity();
   array<AIAgent> agents = {};
   group.GetAgents(agents);
   foreach (AIAgent agent : agents)
-   if (IsAlive(agent.GetControlledEntity())) return agent.GetControlledEntity();
+   if (IsConscious(agent.GetControlledEntity())) return agent.GetControlledEntity();
+  if (leader && IsAlive(leader.GetControlledEntity())) return leader.GetControlledEntity();
+  foreach (AIAgent fallback : agents)
+   if (IsAlive(fallback.GetControlledEntity())) return fallback.GetControlledEntity();
   return null;
  }
 }

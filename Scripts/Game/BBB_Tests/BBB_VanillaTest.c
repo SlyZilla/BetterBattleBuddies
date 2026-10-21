@@ -25,6 +25,7 @@ class BBB_VanillaTest
   }
   // Rearm mutates inventory and native orders; keep it off the crew fixture.
   s_RearmGroup = SpawnRearmFixture("{657590C1EC9E27D3}Prefabs/Groups/OPFOR/Group_USSR_LightFireTeam.et", BBB.Ground(parameters.Transform[3] + Vector(60, 0, 0)));
+  s_AnchorGroup = SpawnRearmFixture("{657590C1EC9E27D3}Prefabs/Groups/OPFOR/Group_USSR_LightFireTeam.et", BBB.Ground(parameters.Transform[3] + Vector(0, 0, 60)));
   int frames = BBB.s_iFrames;
   GetGame().GetCallqueue().CallLater(TestEnd, 3000, false, frames, spawned);
  }
@@ -577,6 +578,9 @@ class BBB_VanillaTest
  static IEntity s_RearmGroup;
  static IEntity s_SpawnedGroup;
  static IEntity s_SpawnedTruck;
+ static IEntity s_AnchorGroup;
+ static IEntity s_DownedLeader;
+ static int s_iAnchor; // 0 pending, 1 pass, -1 fail
  static BaseCompartmentSlot s_TurretSlot;
  static BaseCompartmentSlot s_CargoSlot1;
  static ChimeraCharacter s_Man0;
@@ -590,6 +594,60 @@ class BBB_VanillaTest
  static float s_fSeatDeadline;
  static int s_iSecondPhaseRequests;
  static bool s_bDownObserved;
+
+ // An unconscious leader must not stay the squad's anchor (squads read as strung out
+ // around a body that can't walk). Knock the leader out; checked at the end, >= 1 s later.
+ static void KnockOutLeader(SCR_AIGroup group)
+ {
+  s_DownedLeader = null;
+  s_iAnchor = -1;
+  if (!group) return;
+  ChimeraCharacter leader = ChimeraCharacter.Cast(group.GetLeaderEntity());
+  if (!leader) return;
+  SCR_CharacterDamageManagerComponent damage = SCR_CharacterDamageManagerComponent.Cast(leader.GetDamageManager());
+  if (!damage) return;
+  damage.ForceUnconsciousness(0);
+  s_DownedLeader = leader;
+  s_iAnchor = 0;
+  // Unconsciousness wears off within seconds without injuries: check soon after.
+  GetGame().GetCallqueue().CallLater(CheckAnchorLater, 700, false);
+ }
+
+ static void CheckAnchorLater()
+ {
+  s_iAnchor = -1;
+  if (CheckAnchor()) s_iAnchor = 1;
+ }
+
+ static bool CheckAnchor()
+ {
+  SCR_AIGroup group = SCR_AIGroup.Cast(s_AnchorGroup);
+  ChimeraCharacter leader = ChimeraCharacter.Cast(s_DownedLeader);
+  bool down = leader && BBB.IsAlive(leader) && leader.GetCharacterController().IsUnconscious();
+  if (leader) PrintFormat("[BBB] ANCHOR downed leader alive=%1 unconscious=%2", BBB.IsAlive(leader), leader.GetCharacterController().IsUnconscious());
+  // Vanilla usually hands leadership on; a host (or a moment before it does) can still
+  // name the downed man. Put him back as leader so the fallback itself is exercised.
+  bool handedOn = group && group.GetLeaderEntity() != leader;
+  if (down && group)
+  {
+   AIControlComponent control = AIControlComponent.Cast(leader.FindComponent(AIControlComponent));
+   if (control && control.GetAIAgent()) group.SetNewLeader(control.GetAIAgent());
+  }
+  IEntity anchor = null;
+  if (group) anchor = BBB.AnchorOf(group);
+  bool member = false;
+  if (group && anchor)
+  {
+   array<AIAgent> agents = {};
+   group.GetAgents(agents);
+   foreach (AIAgent agent : agents)
+    if (agent && agent.GetControlledEntity() == anchor) member = true;
+  }
+  bool nativeDowned = group && group.GetLeaderEntity() == leader;
+  bool ok = down && nativeDowned && anchor && anchor != leader && member && BBB.IsConscious(anchor) && !BBB.IsConscious(leader);
+  PrintFormat("[BBB] ANCHOR regression ok=%1 leaderDown=%2 vanillaHandedOn=%3 nativeLeaderIsDowned=%4 anchorIsDowned=%5 anchorConscious=%6 anchorInGroup=%7", ok, down, handedOn, nativeDowned, anchor == leader, BBB.IsConscious(anchor), member);
+  return ok;
+ }
 
  // Confirm fresh native seat occupancy by a fit member. Identity and accepted
  // request counters cannot stand in for an actually occupied turret.
@@ -660,16 +718,23 @@ class BBB_VanillaTest
    return;
   }
   bool turretOK = s_bSetupOK && s_bAmmoOK && s_bPromote1OK && downReplaceOK;
+  if (s_iAnchor == 0 && GetGame().GetWorld().GetWorldTime() < s_fSeatDeadline)
+  {
+   GetGame().GetCallqueue().CallLater(FinishVanillaTest, 100, false, mine, recognizedDown, prom2);
+   return;
+  }
+  bool anchorOK = s_iAnchor == 1;
   PrintFormat("[BBB] TURRET second down=%1 requested=%2 occupied=%3 actor=%4", recognizedDown, prom2, downReplaceOK, occupant);
   PrintFormat("[BBB] TURRET regression ok=%1 setup=%2 ammo=%3 emptyPromote=%4 downReplace=%5", turretOK, s_bSetupOK, s_bAmmoOK, s_bPromote1OK, downReplaceOK);
 
   bool found = mine != null;
   string verdict = "FAIL";
-  if (BBB.IsStarted() && BBB_VanillaHooks.Cast(BBB.s_Hooks) && found && s_iFramesCounted > 30 && s_bSelectorOK && s_bThreatOK && s_bExposedFireOK && turretOK && s_bAntiArmorOK && s_bRearmOK) verdict = "PASS";
+  if (BBB.IsStarted() && BBB_VanillaHooks.Cast(BBB.s_Hooks) && found && s_iFramesCounted > 30 && s_bSelectorOK && s_bThreatOK && s_bExposedFireOK && turretOK && s_bAntiArmorOK && s_bRearmOK && anchorOK) verdict = "PASS";
   PrintFormat("[BBB] VANILLATEST %1", verdict);
   PrintFormat("[ACR] VERDICT %1 test=bbbvanilla started=%2 found=%3 frames=%4", verdict, BBB.IsStarted(), found, s_iFramesCounted);
   if (s_SpawnedTruck) SCR_EntityHelper.DeleteEntityAndChildren(s_SpawnedTruck);
   if (s_SpawnedGroup) SCR_EntityHelper.DeleteEntityAndChildren(s_SpawnedGroup);
+  if (s_AnchorGroup) SCR_EntityHelper.DeleteEntityAndChildren(s_AnchorGroup);
   Print("[ACR] TEST COMPLETE");
  }
 
@@ -689,6 +754,7 @@ class BBB_VanillaTest
   s_bThreatOK = TestThreat(mine);
   s_bExposedFireOK = TestExposedFire(mine);
   s_bRearmOK = TestRearm(SCR_AIGroup.Cast(s_RearmGroup));
+  KnockOutLeader(SCR_AIGroup.Cast(s_AnchorGroup));
   if (s_RearmGroup) SCR_EntityHelper.DeleteEntityAndChildren(s_RearmGroup);
 
   array<AIAgent> agents = {};

@@ -112,6 +112,9 @@ class BBB_MedicTest : BBB_AimTest
   MCheck("dash-go", BBB_Medic.Decide(8, 0.1, false, true, false) == BBB_Medic.GO, "8 m dash, casualty in view");
   MCheck("hot-hold", BBB_Medic.Decide(40, 0.01, false, false, true) == BBB_Medic.HOLD_HOT, "healer hit there");
   MCheck("smoking-hold", BBB_Medic.Decide(40, 0.01, false, false, false, true) == BBB_Medic.HOLD_SMOKING, "waiting for smoke bloom");
+  MCheck("too-far-hold", BBB_Medic.Decide(120, 0.4, false, false, false) == BBB_Medic.HOLD_TOO_FAR, "120 m back, alerted");
+  MCheck("too-far-calm-go", BBB_Medic.Decide(120, 0.05, false, false, false) == BBB_Medic.GO, "120 m back, calm");
+  MCheck("near-alerted-go", BBB_Medic.Decide(70, 0.4, false, false, false) == BBB_Medic.GO, "70 m, alerted");
  }
 
  protected void MedicBegin()
