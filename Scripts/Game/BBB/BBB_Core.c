@@ -37,6 +37,8 @@ class BBB_Hooks : Managed
  bool AllowStaticWeapons(SCR_AIGroup group) { return true; }
  // Host tactical doctrines may veto offensive hand grenade employment.
  bool AllowGrenades(SCR_AIGroup group) { return true; }
+ // Host policy for autonomous night illumination.
+ bool AllowFlares(SCR_AIGroup group) { return true; }
  bool AllowBuildings(SCR_AIGroup group) { return true; }
  bool AllowArmorReaction(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
@@ -66,6 +68,7 @@ class BBB
 		BBB_Smoke.Read();
 		BBB_StaticWeapons.Read();
 		BBB_Grenades.Read();
+  BBB_Flares.Read();
   BBB_Buildings.Read();
   BBB_ArmorReaction.Read();
   BBB_ExposedFire.Read();
@@ -96,6 +99,7 @@ class BBB
   BBB_Smoke.Stop();
   BBB_StaticWeapons.Stop();
   BBB_Grenades.Stop();
+  BBB_Flares.Stop();
   BBB_Buildings.Stop();
   BBB_ArmorReaction.Stop();
   BBB_Transport.ClearHits();
@@ -142,6 +146,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.staticWeapons", t);
 		BBB_Grenades.Tick();
 		t = BBB_Perf.Lap("tick.grenades", t);
+  BBB_Flares.Tick();
+  t = BBB_Perf.Lap("tick.flares", t);
   BBB_Buildings.Tick();
   t = BBB_Perf.Lap("tick.buildings", t);
   BBB_ArmorReaction.Tick();

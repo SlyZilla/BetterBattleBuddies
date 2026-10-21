@@ -2,6 +2,7 @@
 
 ## 0.1.5 — unreleased
 
+- Added autonomous night illumination (`-bbbFlares 0` disables): soldiers carrying flare ammunition illuminate recently sighted enemy sectors, with player/GM order vetoes and shared squad/area cooldowns to limit repeated launches.
 - AI pinned down in the open now fight back instead of freezing: a suppressed soldier with no cover keeps spotting enemies, shoots without the extra hesitation and fires faster and looser. In cover they still keep their heads down (`-bbbExposedFire 0` restores the old behaviour).
 - Medics no longer walk past an enemy they can see on their way to a casualty: with a visible enemy within 50 m they fight first, then go. Soldiers dragging a casualty let go and shoot back when they see an enemy within 20 m.
 - Fixed riflemen ignoring jeeps and Humvees: once rifle hits had bounced off a UAZ or Humvee hull, AI stopped shooting at it for the rest of the game, even at its exposed machine gunner. Only real armour (APCs, IFVs, tanks) is now treated as immune to rifle fire.

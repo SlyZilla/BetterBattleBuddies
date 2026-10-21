@@ -1,0 +1,176 @@
+BehaviorTree {
+ Name "Prefabs/BBB/FireHandheldFlare.bt"
+ Nodes {
+  RootNode Root {
+   Name "Root"
+   EditorPos 544 -416
+   Nodes {
+    Selector Selector {
+     Name "Selector"
+     EditorPos 547.286 -271.833
+     Nodes {
+      Sequence Sequence {
+       Name "Sequence"
+       EditorPos 361.437 -61.706
+       Nodes {
+        SCR_AIFireIllumFlareBehaviorParameters "SCR_AI Fire Illum Flare Behavior Parameters" {
+         Name "SCR_AI Fire Illum Flare Behavior Parameters"
+         EditorPos -1186.857 113.19
+         OutPorts {
+          SingleOutputPortContainer SingleOutputPortContainer {
+           Port 1
+           PortName "TargetPosition"
+          }
+          SingleOutputPortContainer SingleOutputPortContainer {
+           Port 2
+           PortName "WeaponComponent"
+          }
+          SingleOutputPortContainer SingleOutputPortContainer {
+           Port 0
+           PortName "MagazineComponent"
+          }
+          SingleOutputPortContainer SingleOutputPortContainer {
+           Port 3
+           PortName "MuzzleID"
+          }
+         }
+        }
+        SCR_AISwitchWeapon "SCR_AI Switch Weapon" {
+         Name "SCR_AI Switch Weapon"
+         EditorPos -441.194 167.556
+         InPorts {
+          SingleInputPortContainer SingleInputPortContainer {
+           Port 2
+           PortName "WeaponComponent"
+          }
+         }
+        }
+        SCR_AISwitchMuzzle "SCR_AI Switch Muzzle" {
+         Name "SCR_AI Switch Muzzle"
+         EditorPos -270.75 250.528
+         InPorts {
+          SingleInputPortContainer SingleInputPortContainer {
+           Port 3
+           PortName "MuzzleId"
+          }
+         }
+        }
+        SCR_AISwitchMagazine "SCR_AI Switch Magazine" {
+         Name "SCR_AI Switch Magazine"
+         EditorPos -114.528 340.528
+         InPorts {
+          SingleInputPortContainer SingleInputPortContainer {
+           Port 0
+           PortName "MagazineComponent"
+          }
+         }
+        }
+        Parallel Parallel {
+         Name "Parallel"
+         EditorPos 359.46 338.143
+         Nodes {
+          Sequence Sequence {
+           Name "Sequence"
+           EditorPos -18.178 478.778
+           Nodes {
+            AITaskCharacterRaiseWeapon "Character Raise Weapon" {
+             Name "Character Raise Weapon"
+             EditorPos -578.714 685.536
+            }
+            AITaskIdle Idle {
+             Name "Idle"
+             EditorPos -326.786 678.929
+             Period 1
+             PeriodRandom 1
+            }
+            SCR_AIDecoWeaponUnobstructed "SCR_AI Deco Weapon Unobstructed" {
+             Name "SCR_AI Deco Weapon Unobstructed"
+             EditorPos -203.778 679.028
+             Nodes {
+              BBB_AIUseHandheldFlare Fire {
+               Name "Fire"
+               EditorPos -115.968 787.779
+              }
+             }
+            }
+            SCR_AICompleteAction "SCR_AI Complete Action" {
+             Name "SCR_AI Complete Action"
+             EditorPos 94.453 681.592
+            }
+            AITaskReturnState "Return  State" {
+             Name "Return  State"
+             EditorPos 282.798 685.913
+             Result RUNNING
+            }
+           }
+          }
+          AITaskCharacterAim "Character Aim" {
+           Name "Character Aim"
+           EditorPos 775.881 485.901
+           InAimAtPosition 4
+          }
+         }
+        }
+       }
+      }
+      Sequence Sequence {
+       Name "Sequence"
+       EditorPos 739.666 -74.857
+       Nodes {
+        SCR_AIFailAction "SCR_AI Fail Action" {
+         Name "SCR_AI Fail Action"
+         EditorPos 659.416 60.893
+        }
+        AITaskReturnState "Return  State" {
+         Name "Return  State"
+         EditorPos 828.805 54.06
+         Result RUNNING
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+ Variables {
+  BtVariableVector targetPosition {
+   Flags 0
+   Desc "vector"
+  }
+  BtVariableObject weaponComp {
+   Flags 0
+   Desc "BaseWeaponComponent"
+  }
+  BtVariableObject magazineComp {
+   Flags 0
+   Desc "BaseMagazineComponent"
+  }
+  BtVariableInteger muzzleId {
+   Flags 0
+   Desc "int"
+  }
+ }
+ VariablesRefs {
+  VariableReference magazineComp {
+   VariableType 2
+   EditorPos -800 384
+  }
+  VariableReference targetPosition {
+   VariableType 0
+   EditorPos -800 128
+  }
+  VariableReference weaponComp {
+   VariableType 1
+   EditorPos -800 208
+  }
+  VariableReference muzzleId {
+   VariableType 3
+   EditorPos -800 288
+  }
+  VariableReference targetPosition {
+   VariableType 0
+   EditorPos 528 704
+  }
+ }
+}

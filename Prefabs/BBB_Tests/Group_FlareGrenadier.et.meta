@@ -1,0 +1,7 @@
+MetaFileClass {
+ Name "{BBB0F1A200000010}Prefabs/BBB_Tests/Group_FlareGrenadier.et"
+ Configurations {
+  ENTResourceClass PC {}
+  ENTResourceClass HEADLESS : PC {}
+ }
+}

@@ -1,0 +1,7 @@
+MetaFileClass {
+ Name "{BBB0F1A200000001}Prefabs/BBB/FireHandheldFlare.bt"
+ Configurations {
+  BehaviorTreeResourceClass PC {}
+  BehaviorTreeResourceClass HEADLESS : PC {}
+ }
+}
