@@ -579,6 +579,12 @@ class BBB_Rearm
     CancelRearmAction(soldier);
     continue;
    }
+   // A bounding or withdrawing man isn't sent to loot a body mid-move.
+   if ((utility && utility.m_BBBFireJob) || BBB_Morale.IsWithdrawing(group))
+   {
+    CancelRearmAction(soldier);
+    continue;
+   }
    if (s_mNextRearmCheck.Contains(soldier) && nowMs < s_mNextRearmCheck.Get(soldier)) continue;
    if (utility && utility.m_ThreatSystem)
    {

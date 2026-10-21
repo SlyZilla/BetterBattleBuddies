@@ -264,9 +264,11 @@ class BBB_FireManeuver
   int alive;
   array<AIAgent> roster = {};
   BBB.s_Hooks.GetMembers(job.m_Group, roster);
+  // A man killed, knocked out or taken off the squad drops out; the rest fight on
+  // (one casualty used to end the whole manoeuvre and bench the squad for 15 s).
+  if (DropLost(job, roster) && !TeamsHold(job)) { if (System.IsCLIParam("acrBbbFireManeuverTest")) Print("[BBB] FIRE END too few left"); End(job.m_Group, now); return; }
   foreach (SCR_AIUtilityComponent utility : job.m_Members)
   {
-   if (!utility || !BBB.IsAlive(utility.m_OwnerEntity) || !roster.Contains(utility.GetAIAgent())) { if (System.IsCLIParam("acrBbbFireManeuverTest")) Print("[BBB] FIRE END roster or death"); End(job.m_Group, now); return; }
    alive++;
    if (utility.m_BBBFireMove && utility.m_BBBFireMove.m_eState == SCR_EAICombatMoveRequestState.FAIL)
     Failed(utility, utility.m_BBBFireMove, utility.m_BBBFireMove.m_eFailReason);
@@ -316,7 +318,7 @@ class BBB_FireManeuver
    }
   }
   if (fresh) job.m_fFresh = now;
-  if (now - job.m_fFresh > 6 || alive < 4) { End(job.m_Group, now); return; }
+  if (now - job.m_fFresh > 6 || alive < 3) { End(job.m_Group, now); return; }
   if ((System.IsCLIParam("acrBbbFireManeuverTest") || System.IsCLIParam("acrBbbFireManeuverProbeTest")) && now >= job.m_fLog)
   {
    PrintFormat("[BBB] FIRE STATE cover=%1 ready=%2 movers=%3 arrivals=%4 fireAge=%5 moving=%6", job.m_iCoverTeam, coverReady, moveReady, job.m_iArrived, now - job.m_fCoverFire, job.m_bMoving);
@@ -651,6 +653,47 @@ class BBB_FireManeuver
    utility.m_BBBFireMove = null;
   }
  }
+ static int s_iDropped;
+
+ // Release members who can no longer take part. True when anyone dropped out.
+ protected static bool DropLost(BBB_FireTeamJob job, array<AIAgent> roster)
+ {
+  bool dropped;
+  for (int i = job.m_Members.Count() - 1; i >= 0; i--)
+  {
+   SCR_AIUtilityComponent utility = job.m_Members[i];
+   if (utility && BBB.IsConscious(utility.m_OwnerEntity) && roster.Contains(utility.GetAIAgent())) continue;
+   if (utility && utility.m_BBBFireJob == job)
+   {
+    if (utility.m_BBBFireMove && utility.m_CombatMoveState && utility.m_CombatMoveState.GetRequest() == utility.m_BBBFireMove) utility.m_CombatMoveState.CancelRequest();
+    if (utility.m_CombatMoveState) utility.m_CombatMoveState.m_BBBFireOwner = null;
+    utility.m_BBBFireJob = null;
+    utility.m_BBBFireMove = null;
+   }
+   int reached = job.m_Reached.Find(utility);
+   if (reached >= 0)
+   {
+    job.m_Reached.RemoveOrdered(reached);
+    if (job.m_iArrived > 0) job.m_iArrived--;
+   }
+   job.m_Members.RemoveOrdered(i);
+   s_iDropped++;
+   dropped = true;
+   if (System.IsCLIParam("acrBbbFireManeuverTest")) PrintFormat("[BBB] FIRE DROP member out, %1 left", job.m_Members.Count());
+  }
+  return dropped;
+ }
+
+ // Still a manoeuvre: three men, someone on each team.
+ protected static bool TeamsHold(BBB_FireTeamJob job)
+ {
+  if (job.m_Members.Count() < 3) return false;
+  int team0;
+  foreach (SCR_AIUtilityComponent member : job.m_Members)
+   if (member.m_iBBBFireTeam == 0) team0++;
+  return team0 > 0 && team0 < job.m_Members.Count();
+ }
+
  protected static void End(SCR_AIGroup group, float now)
  {
   BBB_FireTeamJob job = s_Jobs.Get(group);

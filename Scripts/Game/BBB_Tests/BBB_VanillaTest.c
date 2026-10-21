@@ -580,7 +580,10 @@ class BBB_VanillaTest
  static IEntity s_SpawnedTruck;
  static IEntity s_AnchorGroup;
  static IEntity s_DownedLeader;
- static int s_iAnchor; // 0 pending, 1 pass, -1 fail
+ static int s_iAnchor; // 0 pending, 1 pass, -1 fail (anchor and fire-drop checks)
+ static ref BBB_FireTeamJob s_FireJob;
+ static IEntity s_FireVictim;
+ static bool s_bFireDrop1;
  static BaseCompartmentSlot s_TurretSlot;
  static BaseCompartmentSlot s_CargoSlot1;
  static ChimeraCharacter s_Man0;
@@ -616,7 +619,43 @@ class BBB_VanillaTest
  static void CheckAnchorLater()
  {
   s_iAnchor = -1;
-  if (CheckAnchor()) s_iAnchor = 1;
+  if (!CheckAnchor()) return;
+  // Same squad, leader still down: a fire-and-maneuver job loses him and fights on.
+  s_FireJob = BBB_FireManeuver.TestJob(SCR_AIGroup.Cast(s_AnchorGroup));
+  if (!s_FireJob || s_FireJob.m_Members.Count() < 4) { PrintFormat("[BBB] FIREDROP fixture failed"); return; }
+  SCR_AIUtilityComponent downed = null;
+  foreach (SCR_AIUtilityComponent m : s_FireJob.m_Members)
+   if (m.m_OwnerEntity == s_DownedLeader) downed = m;
+  int before = s_FireJob.m_Members.Count();
+  bool dropped = BBB_FireManeuver.TestDrop(s_FireJob);
+  bool holds = BBB_FireManeuver.TestTeamsHold(s_FireJob);
+  bool released = downed && !downed.m_BBBFireJob && !s_FireJob.m_Members.Contains(downed);
+  bool othersKept = true;
+  foreach (SCR_AIUtilityComponent kept : s_FireJob.m_Members)
+   if (kept.m_BBBFireJob != s_FireJob) othersKept = false;
+  s_bFireDrop1 = dropped && holds && released && othersKept && s_FireJob.m_Members.Count() == before - 1;
+  PrintFormat("[BBB] FIREDROP knocked-out ok=%1 dropped=%2 holds=%3 released=%4 othersKept=%5 members=%6->%7", s_bFireDrop1, dropped, holds, released, othersKept, before, s_FireJob.m_Members.Count());
+  if (!s_bFireDrop1) return;
+  // A second casualty leaves two men: no longer a manoeuvre, the job must end.
+  s_FireVictim = s_FireJob.m_Members[s_FireJob.m_Members.Count() - 1].m_OwnerEntity;
+  SCR_DamageManagerComponent dmg = SCR_DamageManagerComponent.GetDamageManager(s_FireVictim);
+  if (dmg) dmg.Kill(Instigator.CreateInstigator(null));
+  s_iAnchor = 0;
+  GetGame().GetCallqueue().CallLater(CheckFireDropKilled, 500, false);
+ }
+
+ static void CheckFireDropKilled()
+ {
+  s_iAnchor = -1;
+  int before = s_FireJob.m_Members.Count();
+  // The dead man's agent (and utility) may already be gone; his body stays.
+  bool dead = s_FireVictim && !BBB.IsAlive(s_FireVictim);
+  bool dropped = BBB_FireManeuver.TestDrop(s_FireJob);
+  bool ends = !BBB_FireManeuver.TestTeamsHold(s_FireJob);
+  bool ok = dead && dropped && ends && s_FireJob.m_Members.Count() == before - 1;
+  PrintFormat("[BBB] FIREDROP killed ok=%1 dead=%2 dropped=%3 tooFewEnds=%4 members=%5->%6", ok, dead, dropped, ends, before, s_FireJob.m_Members.Count());
+  foreach (SCR_AIUtilityComponent m : s_FireJob.m_Members) if (m) m.m_BBBFireJob = null;
+  if (ok) s_iAnchor = 1;
  }
 
  static bool CheckAnchor()
@@ -823,4 +862,36 @@ modded class SCR_BaseGameMode
   if (Replication.IsServer() && (System.IsCLIParam("bbbVanillaTest") || System.IsCLIParam("acrBbbVanillaTest") || System.IsCLIParam("bbbRearmTest")))
    GetGame().GetCallqueue().CallLater(BBB_VanillaTest.Test, 25000);
  }
+}
+
+// Test access to the fire-and-maneuver casualty handling (job is never registered).
+modded class BBB_FireManeuver
+{
+ static BBB_FireTeamJob TestJob(SCR_AIGroup group)
+ {
+  if (!group) return null;
+  array<AIAgent> agents = {};
+  group.GetAgents(agents);
+  BBB_FireTeamJob job = new BBB_FireTeamJob();
+  job.m_Group = group;
+  foreach (AIAgent agent : agents)
+  {
+   SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
+   if (utility) job.m_Members.Insert(utility);
+  }
+  foreach (int index, SCR_AIUtilityComponent member : job.m_Members)
+  {
+   member.m_BBBFireJob = job;
+   member.m_iBBBFireTeam = 1;
+   if (index < job.m_Members.Count() / 2) member.m_iBBBFireTeam = 0;
+  }
+  return job;
+ }
+ static bool TestDrop(BBB_FireTeamJob job)
+ {
+  array<AIAgent> roster = {};
+  BBB.s_Hooks.GetMembers(job.m_Group, roster);
+  return DropLost(job, roster);
+ }
+ static bool TestTeamsHold(BBB_FireTeamJob job) { return TeamsHold(job); }
 }

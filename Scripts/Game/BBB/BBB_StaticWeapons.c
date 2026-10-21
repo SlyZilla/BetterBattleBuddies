@@ -312,6 +312,8 @@ class BBB_StaticWeapons
 
 		if (BBB_OrderIntent.Blocks(utility)) return false;
 		if (BBB_Drag.Busy(soldier)) return false;
+		// Already bounding in a fire-and-maneuver: one BBB task at a time.
+		if (utility.m_BBBFireJob) return false;
 
 		return true;
 	}
@@ -645,6 +647,8 @@ class BBB_StaticWeapons
 		{
 			if (!group || BBB.HasPlayer(group)) continue;
 			if (!BBB.s_Hooks.AllowStaticWeapons(group)) continue;
+			// A withdrawing squad doesn't stop to man a gun (one already crewed stays until tethered off).
+			if (BBB_Morale.IsWithdrawing(group)) continue;
 
 			// One weapon per squad at a time
 			bool alreadyCrewing = false;
