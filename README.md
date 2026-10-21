@@ -1,11 +1,11 @@
 # Better Battle Buddies
 
 [![Game: Arma Reforger](https://img.shields.io/badge/Arma-Reforger-556b2f?style=flat-square)](https://reforger.armaplatform.com/)
-[![Workshop release: 0.1.4](https://img.shields.io/badge/Workshop-0.1.4-blue?style=flat-square)](CHANGELOG.md)
+[![Workshop release: 0.1.5](https://img.shields.io/badge/Workshop-0.1.5-blue?style=flat-square)](CHANGELOG.md)
 [![Standalone addon](https://img.shields.io/badge/Addon-Standalone-teal?style=flat-square)](#install-and-play)
 [![License: APL-SA](https://img.shields.io/badge/License-APL--SA-orange?style=flat-square)](LICENSE.md)
 
-AI that keeps its head on a swivel—and knows when to hit the dirt.
+AI that keeps its head on a swivelâ€”and knows when to hit the dirt.
 
 Better Battle Buddies improves AI scanning, weapon readiness, combat reactions,
 medical assistance and vehicle handling in Arma Reforger. Use it independently
@@ -18,7 +18,7 @@ AC: Actual and does not add a commander game mode.
 2. Start a vanilla scenario such as Conflict or Game Master with AI present.
 3. For multiplayer, load BBB on the server and joining clients.
 
-The current Workshop release is **0.1.4**.
+The current Workshop release is **0.1.5**.
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## What your buddies do
@@ -44,21 +44,17 @@ recovery succeeds.
 
 ## Optional features and compatibility
 
-In Workshop 0.1.4, medic smoke is enabled by default. The separate safer-healing
-behavior is off by default; server startup options include `-bbbMedicSmoke 0` to disable smoke and
-`-bbbMedic 1` to enable safer healing. ACE is optional; ACE drag and other
-ACE-dependent behavior require ACE to be loaded. Experimental combat options
-remain opt-in.
+Combat, medical and vehicle features are enabled by default. Server owners can
+disable them individually with the options below. The optional Think panel stays
+off unless enabled. ACE is optional; ACE-dependent behaviour needs ACE loaded.
 
 AC: Actual integrates through BBB's host hooks and manages its own commander,
 bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
 
-### Upcoming 0.1.5 options
+### Server options
 
-The pending 0.1.5 release enables combat, medical and vehicle features by default.
-The optional Think panel remains off. These changes are in the source checkout;
-Workshop 0.1.4 keeps its existing behaviour until the update is published.
-Player control, explicit player/GM orders and host-mod policy take priority.
+Player control, explicit player/GM orders and host-mod policy take priority over
+autonomous features. Each option below accepts `0` to disable its feature.
 
 Server owners can disable features individually:
 

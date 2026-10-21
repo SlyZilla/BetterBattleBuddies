@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.5 — unreleased
+## 0.1.6 — unreleased
+
+## 0.1.5 — released
 
 More initiative under fire, with your orders still in charge. This update enables BBB's combat, medical and vehicle features by default; each retains its own server off switch. The optional Think panel remains off.
 
