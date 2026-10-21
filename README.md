@@ -5,7 +5,7 @@
 [![Standalone addon](https://img.shields.io/badge/Addon-Standalone-teal?style=flat-square)](#install-and-play)
 [![License: APL-SA](https://img.shields.io/badge/License-APL--SA-orange?style=flat-square)](LICENSE.md)
 
-AI that keeps its head on a swivelâ€”and knows when to hit the dirt.
+AI that keeps its head on a swivel—and knows when to hit the dirt.
 
 Better Battle Buddies improves AI scanning, weapon readiness, combat reactions,
 medical assistance and vehicle handling in Arma Reforger. Use it independently
