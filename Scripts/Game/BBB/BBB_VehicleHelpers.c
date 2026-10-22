@@ -1,7 +1,8 @@
 // Three helpers for AI vehicles, ticked once a second on the server (BBB.Tick).
 // Gates: the game's AI driver stops, gets out and opens a closed gate on its
 // route, which often wrecked rides (the transport counted as lost). AI-driven
-// vehicles now open gates just ahead of them, without stopping.
+// vehicles now open gates just ahead of them, without stopping (wide doors and any door the
+// game marks "OpenGate"; armour that isn't safe looks further ahead, see BBB_CrewStays).
 // Truck beds: soldiers getting out of cargo seats sometimes end up standing on
 // the bed and never get down. One still up there after 4 s is set down on
 // the ground beside the vehicle.
@@ -11,6 +12,9 @@ class BBB_VehicleHelpers : Managed
  static const float LOOK_AHEAD = 25;    // m in front of the vehicle: the AI driver stops
  static const float LOOK_RADIUS = 25;   // for a gate up to ~45 m ahead
  static const float GATE_MIN_WIDTH = 2.2; // smaller doors are house doors: left alone
+ static const float ARMOUR_LOOK_AHEAD = 50;  // armour not safe: a gate up to ~80 m ahead
+ static const float ARMOUR_LOOK_RADIUS = 30;
+ static const float ARMOUR_ALERT_M = 400;
  static const float BED_HEIGHT = 0.9;    // m above the ground
  static const float STALL_SECONDS = 8.0;
  static const float STALL_SECONDS_FIGHTING = 25.0;
@@ -78,6 +82,22 @@ class BBB_VehicleHelpers : Managed
   return true;
  }
 
+ // A door the game's AI treats as a vehicle gate (its "OpenGate" smart action): each leaf of a
+ // double gate is narrower than GATE_MIN_WIDTH (Arland: 1.5 m), so width alone skipped them.
+ // Cached per door: house doors near every vehicle are looked at every second (perf 21 Oct:
+ // uncached, tick.vehicleHelpers went from ~1.2 to ~2.8 ms).
+ protected static ref map<IEntity, bool> s_mMarkedGate = new map<IEntity, bool>();
+ static bool MarkedGate(IEntity entity)
+ {
+  if (!entity) return false;
+  bool marked;
+  if (s_mMarkedGate.Find(entity, marked)) return marked;
+  marked = SCR_AISmartActionHandling.FindSmartAction(entity, "OpenGate", false) != null;
+  if (!marked && entity.GetParent()) marked = SCR_AISmartActionHandling.FindSmartAction(entity.GetParent(), "OpenGate", false) != null;
+  s_mMarkedGate.Set(entity, marked);
+  return marked;
+ }
+
  protected void OpenGatesFor(SCR_AIGroup group)
  {
   IEntity vehicle = BBB_Transport.CrewedVehicle(group);
@@ -91,9 +111,19 @@ class BBB_VehicleHelpers : Managed
   array<AIWaypoint> waypoints = {};
   group.GetWaypoints(waypoints);
   if (waypoints.IsEmpty()) return;
-  vector ahead = vehicle.GetOrigin() + vehicle.GetTransformAxis(2) * LOOK_AHEAD;
+  // Armour that isn't safe (hit, or enemies known within ARMOUR_ALERT_M) drives straight on:
+  // gates up to ~80 m ahead are thrown open before it gets there, so it never slows for one.
+  float lookAhead = LOOK_AHEAD;
+  float lookRadius = LOOK_RADIUS;
+  bool plough = BBB_CrewStays.On() && BBB_Armour.Armoured(vehicle) && (BBB_Transport.VehicleHitRecently(vehicle, 30000) || KnownEnemiesNear(group, vehicle.GetOrigin(), ARMOUR_ALERT_M) > 0);
+  if (plough)
+  {
+   lookAhead = ARMOUR_LOOK_AHEAD;
+   lookRadius = ARMOUR_LOOK_RADIUS;
+  }
+  vector ahead = vehicle.GetOrigin() + vehicle.GetTransformAxis(2) * lookAhead;
   m_Found.Clear();
-  GetGame().GetWorld().QueryEntitiesBySphere(ahead, LOOK_RADIUS, CollectDoor);
+  GetGame().GetWorld().QueryEntitiesBySphere(ahead, lookRadius, CollectDoor);
   // The obstacle the game's AI driver is stopping for, if it says.
   AICarMovementComponent movement = AICarMovementComponent.Cast(vehicle.FindComponent(AICarMovementComponent));
   IEntity navlink;
@@ -114,9 +144,11 @@ class BBB_VehicleHelpers : Managed
    if (!door || door.IsOpen() || door.IsOpening()) continue;
    vector mins, maxs;
    entity.GetBounds(mins, maxs);
-   if (Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) < GATE_MIN_WIDTH) continue;
+   if (Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) < GATE_MIN_WIDTH && !MarkedGate(entity)) continue;
    door.SetControlValue(1, RplId.Invalid());
-   PrintFormat("[ACR] GATE opened ahead of %1 at %2", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
+   if (plough) BBB_Perf.Count("crewStays.armourGate");
+   if (plough) PrintFormat("[ACR] GATE opened ahead of %1 at %2 (armour, not safe: drives through)", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
+   else PrintFormat("[ACR] GATE opened ahead of %1 at %2", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
   }
  }
 
