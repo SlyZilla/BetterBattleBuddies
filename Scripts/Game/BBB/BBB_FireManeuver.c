@@ -4,6 +4,7 @@ class BBB_FireTeamJob : Managed
 {
  SCR_AIGroup m_Group;
  AIWaypoint m_Waypoint;
+ ref BBB_OrderLease m_Lease;
  vector m_WaypointPos, m_Threat, m_Center;
  ref array<SCR_AIUtilityComponent> m_Members = {};
  ref array<SCR_AIUtilityComponent> m_Reached = {};
@@ -19,6 +20,10 @@ class BBB_FireManeuver
  static int s_iStarted, s_iSwaps, s_iRequests, s_iArrived, s_iNoCover, s_iCoverShots;
  static int s_iTicks, s_iTickMs, s_iTickMax, s_iDecisionMs, s_iEventMs;
  protected static bool s_bInTick;
+ protected static int s_iReadyEpoch;
+ protected static int s_iAdmissionCursor;
+ static const int MAX_ADMISSIONS_PER_TICK = 4;
+ static const float START_RETRY_S = 4;
  // Live, the enemy ducks and vanilla stops shooting within seconds, so the old 3 s
  // windows almost never opened a bound (20 Oct Everon: 31 starts, 2 bounds).
  static const float COVER_FIRE_S = 6;      // covering gun counts as firing this long after a shot
@@ -44,9 +49,29 @@ class BBB_FireManeuver
  }
 
  // Resolve readiness from actual equipped native selection, not prefab names.
+ // Cache only inside this synchronous bookkeeping tick. Native decisions outside
+ // it always inspect current weapons, injuries and queued human orders afresh.
+ static bool OrdersBlock(SCR_AIUtilityComponent utility)
+ {
+  if (!utility) return false;
+  if (s_bInTick && utility.m_iBBBOrderEpoch == s_iReadyEpoch) return utility.m_bBBBOrderHeld;
+  bool held = BBB_OrderIntent.Blocks(utility);
+  if (s_bInTick) { utility.m_iBBBOrderEpoch = s_iReadyEpoch; utility.m_bBBBOrderHeld = held; }
+  return held;
+ }
+
  static bool Ready(SCR_AIUtilityComponent utility)
  {
-  if (!utility || !utility.m_CombatComponent || !utility.m_CombatMoveState || BBB_OrderIntent.Blocks(utility)) return false;
+  if (!utility) return false;
+  if (s_bInTick && utility.m_iBBBReadyEpoch == s_iReadyEpoch) return utility.m_bBBBReady;
+  bool ready = ReadyNow(utility);
+  if (s_bInTick) { utility.m_iBBBReadyEpoch = s_iReadyEpoch; utility.m_bBBBReady = ready; }
+  return ready;
+ }
+
+ protected static bool ReadyNow(SCR_AIUtilityComponent utility)
+ {
+  if (!utility || !utility.m_CombatComponent || !utility.m_CombatMoveState) return false;
   SCR_AICombatComponent combat = utility.m_CombatComponent;
   SCR_AIBehaviorBase behavior = utility.GetCurrentBehavior();
   if (!SCR_AIAttackBehavior.Cast(behavior) && !SCR_AISuppressBehavior.Cast(behavior)) return false;
@@ -60,41 +85,51 @@ class BBB_FireManeuver
   CharacterControllerComponent controller = body.GetCharacterController();
   if (controller.IsReloading() || controller.IsChangingItem() || controller.IsClimbing() || controller.IsSwimming() || controller.GetDisableWeaponControls()) return false;
   if (utility.m_ThreatSystem && utility.m_ThreatSystem.GetThreatMeasure() >= 0.66) return false;
-  return !BBB_Drag.Busy(body);
+  return !BBB_Drag.Busy(body) && !OrdersBlock(utility);
+ }
+
+ protected static bool FreshTarget(SCR_AIUtilityComponent utility, BaseTarget target, out vector known)
+ {
+  if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.GetUnitType() != EAIUnitType.UnitType_Infantry || target.IsDisarmed()) return false;
+  if (target.GetTimeSinceSeen() > 3 || target.GetDistance() < 45 || target.GetDistance() > 300 || !utility.m_CombatComponent.IsTargetVisible(target) || target.GetTraceFraction() < 0.5) return false;
+  known = target.GetLastSeenPosition();
+  return true;
  }
 
  static bool Fresh(SCR_AIUtilityComponent utility, out vector known)
  {
   if (!Ready(utility)) return false;
-  SCR_AICombatComponent combat = utility.m_CombatComponent;
+  // The selected target was already first in the old list. Check it before
+  // allocating/filling a perception list; ordinary attackers need no list at all.
+  if (FreshTarget(utility, utility.m_CombatComponent.GetCurrentTarget(), known)) return true;
+  if (!SCR_AISuppressBehavior.Cast(utility.GetCurrentBehavior()) || !utility.m_PerceptionComponent) return false;
   array<BaseTarget> targets = {};
-  if (combat.GetCurrentTarget()) targets.Insert(combat.GetCurrentTarget());
-  if (SCR_AISuppressBehavior.Cast(utility.GetCurrentBehavior()) && utility.m_PerceptionComponent)
-   utility.m_PerceptionComponent.GetTargetsList(targets, ETargetCategory.ENEMY);
+  utility.m_PerceptionComponent.GetTargetsList(targets, ETargetCategory.ENEMY);
   foreach (BaseTarget target : targets)
-  {
-   if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.GetUnitType() != EAIUnitType.UnitType_Infantry || target.IsDisarmed()) continue;
-   if (target.GetTimeSinceSeen() > 3 || target.GetDistance() < 45 || target.GetDistance() > 300 || !combat.IsTargetVisible(target) || target.GetTraceFraction() < 0.5) continue;
-   known = target.GetLastSeenPosition();
-   return true;
-  }
+   if (FreshTarget(utility, target, known)) return true;
   return false;
+ }
+
+ protected static bool DetectedTarget(SCR_AIUtilityComponent utility, BaseTarget target, out vector known)
+ {
+  if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY || target.GetUnitType() != EAIUnitType.UnitType_Infantry || target.IsDisarmed() || target.GetTimeSinceDetected() < 0 || target.GetTimeSinceDetected() > 5) return false;
+  vector report = target.GetLastDetectedPosition();
+  float distance = vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), report);
+  if (distance < 45 || distance > 300) return false;
+  known = report;
+  return true;
  }
 
  static bool Detected(SCR_AIUtilityComponent utility, out vector known)
  {
   if (!utility || !utility.m_PerceptionComponent || !utility.m_OwnerEntity) return false;
+  // Prefer the native combat selection's actual report. Fall back to native
+  // perception when it has no eligible selected infantry contact.
+  if (utility.m_CombatComponent && DetectedTarget(utility, utility.m_CombatComponent.GetCurrentTarget(), known)) return true;
   array<BaseTarget> targets = {};
   utility.m_PerceptionComponent.GetTargetsList(targets, ETargetCategory.ENEMY);
   foreach (BaseTarget target : targets)
-  {
-   if (!target || target.GetUnitType() != EAIUnitType.UnitType_Infantry || target.IsDisarmed() || target.GetTimeSinceDetected() < 0 || target.GetTimeSinceDetected() > 5) continue;
-   vector report = target.GetLastDetectedPosition();
-   float distance = vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), report);
-   if (distance < 45 || distance > 300) continue;
-   known = report;
-   return true;
-  }
+   if (DetectedTarget(utility, target, known)) return true;
   return false;
  }
 
@@ -122,6 +157,8 @@ class BBB_FireManeuver
  static bool GroupAllowed(SCR_AIGroup group)
  {
   if (!group || !group.GetGroupUtilityComponent() || !BBB.s_Hooks.AllowFireManeuver(group) || BBB_Morale.IsWithdrawing(group)) return false;
+  IEntity anchor = BBB.s_Hooks.AnchorOf(group);
+  if (!anchor || !BBB_OrderLeash.Allows(group, anchor.GetOrigin(), null, true)) return false;
   SCR_AIGroupUtilityComponent groupUtility = group.GetGroupUtilityComponent();
   if (groupUtility.GetCombatModeExternal() != EAIGroupCombatMode.FIRE_AT_WILL) return false;
   SCR_AIWaypoint waypoint = SCR_AIWaypoint.Cast(group.GetCurrentWaypoint());
@@ -131,7 +168,7 @@ class BBB_FireManeuver
    if (waypoint.GetPrefabData())
    {
     string path = waypoint.GetPrefabData().GetPrefabName();
-    if (path.Contains("Defend") || path.Contains("Garrison") || path.Contains("Suppress") || path.Contains("GetIn") || path.Contains("GetOut") || path.Contains("Patrol") || path.Contains("Follow") || path.Contains("Artillery")) return false;
+    if (path.Contains("Defend") || path.Contains("Garrison") || path.Contains("Suppress") || path.Contains("GetIn") || path.Contains("GetOut") || (path.Contains("Patrol") && !BBB_OrderLeash.s_bOn) || path.Contains("Follow") || path.Contains("Artillery")) return false;
    }
   }
   array<AIAgent> agents = {};
@@ -143,7 +180,7 @@ class BBB_FireManeuver
    if (!member) continue;
    if (!member.GetCharacterController() || member.GetCharacterController().IsPlayerControlled() || member.IsInVehicle()) return false;
    SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
-   if (utility && utility.GetCurrentBehavior() && utility.GetCurrentBehavior().EvaluatePriorityLevel() >= SCR_AIActionBase.PRIORITY_LEVEL_PLAYER) return false;
+   if (OrdersBlock(utility) || !BBB_OrderLeash.Allows(group, member.GetOrigin(), null, true)) return false;
   }
   return true;
  }
@@ -153,6 +190,7 @@ class BBB_FireManeuver
  static void Tick()
  {
   int started = System.GetTickCount();
+  s_iReadyEpoch++;
   s_bInTick = true;
   TickGroups();
   s_bInTick = false;
@@ -186,16 +224,25 @@ class BBB_FireManeuver
   for (int c = s_Next.Count() - 1; c >= 0; c--)
    if (!s_Next.GetKey(c) || !groups.Contains(s_Next.GetKey(c))) s_Next.RemoveElement(c);
   if (!s_bOn) return;
-  foreach (SCR_AIGroup group : groups)
+  int admissions;
+  for (int offset = 0; offset < groups.Count(); offset++)
   {
+   int groupIndex = (s_iAdmissionCursor + offset) % groups.Count();
+   SCR_AIGroup group = groups[groupIndex];
    BBB_FireTeamJob job = s_Jobs.Get(group);
    if (!job)
    {
-    if (now < s_Next.Get(group) || !GroupAllowed(group)) continue;
+    if (admissions >= MAX_ADMISSIONS_PER_TICK || now < s_Next.Get(group)) continue;
+    admissions++;
+    // Admission scans do not need to repeat every second for squads that
+    // cannot form a job. Active jobs still validate orders/update every tick.
+    s_Next.Set(group, now + START_RETRY_S);
+    if (!GroupAllowed(group)) continue;
     job = Start(group, now);
    }
    if (job) Update(job, now);
   }
+  if (!groups.IsEmpty()) s_iAdmissionCursor = (s_iAdmissionCursor + MAX_ADMISSIONS_PER_TICK) % groups.Count();
  }
 
  protected static BBB_FireTeamJob Start(SCR_AIGroup group, float now)
@@ -237,6 +284,7 @@ class BBB_FireManeuver
   job.m_Group = group;
   job.m_Threat = seen;
   job.m_Waypoint = group.GetCurrentWaypoint();
+  job.m_Lease = BBB_OrderLeash.Capture(group);
   if (job.m_Waypoint) job.m_WaypointPos = job.m_Waypoint.GetOrigin();
   job.m_Center = BBB.AnchorOf(group).GetOrigin();
   job.m_fStarted = now;
@@ -268,7 +316,7 @@ class BBB_FireManeuver
  protected static void Update(BBB_FireTeamJob job, float now)
  {
   AIWaypoint waypoint = job.m_Group.GetCurrentWaypoint();
-  if (waypoint != job.m_Waypoint || (waypoint && vector.DistanceXZ(waypoint.GetOrigin(), job.m_WaypointPos) > 1) || now - job.m_fStarted > 60 || BBB_Morale.IsWithdrawing(job.m_Group)) { End(job.m_Group, now); return; }
+  if (!BBB_OrderLeash.Allows(job.m_Group, job.m_Center, job.m_Lease, true) || waypoint != job.m_Waypoint || (waypoint && vector.DistanceXZ(waypoint.GetOrigin(), job.m_WaypointPos) > 1) || now - job.m_fStarted > 60 || BBB_Morale.IsWithdrawing(job.m_Group)) { End(job.m_Group, now); return; }
   int coverReady, moveReady, nextCoverReady;
   bool arrivedCoverFire;
   bool coverMG;
@@ -481,6 +529,7 @@ class BBB_FireManeuver
   if (!job.m_Reached.Contains(utility) || vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), utility.m_vBBBFireDestination) > 2.5) return false;
   // Full roster/host eligibility already runs once per group in TickGroups.
   // Keep immediate intent checks here, like the ordinary-movement decision.
+  if (!BBB_OrderLeash.Allows(job.m_Group, utility.m_OwnerEntity.GetOrigin(), job.m_Lease, true)) return false;
   if (!job.m_Group || job.m_Group.GetCurrentWaypoint() != job.m_Waypoint || job.m_Group.GetGroupUtilityComponent().GetCombatModeExternal() != EAIGroupCombatMode.FIRE_AT_WILL) return false;
   SCR_AIWaypoint waypoint = SCR_AIWaypoint.Cast(job.m_Waypoint);
   if (waypoint && waypoint.GetPriorityLevel() >= SCR_AIActionBase.PRIORITY_LEVEL_PLAYER) return false;
@@ -509,6 +558,7 @@ class BBB_FireManeuver
   if (!s_bOn || !job || !Ready(utility) || !job.m_Group) return 0;
   // Group roster/host intent is validated once per tick. Native order changes
   // and this soldier's direct command are checked immediately without N^2 scans.
+  if (!BBB_OrderLeash.Allows(job.m_Group, utility.m_OwnerEntity.GetOrigin(), job.m_Lease, true)) return 0;
   if (job.m_Group.GetCurrentWaypoint() != job.m_Waypoint || job.m_Group.GetGroupUtilityComponent().GetCombatModeExternal() != EAIGroupCombatMode.FIRE_AT_WILL) return 0;
   SCR_AIWaypoint waypoint = SCR_AIWaypoint.Cast(job.m_Waypoint);
   if (waypoint && waypoint.GetPriorityLevel() >= SCR_AIActionBase.PRIORITY_LEVEL_PLAYER) return 0;
@@ -607,7 +657,7 @@ class BBB_FireManeuver
  {
   if (utility.m_BBBFireMove != request || !utility.m_BBBFireJob) return;
   bool physicalCover = cover || (utility.m_bBBBFireGeometry && BBB_FiringCover.Protected(position, utility.m_BBBFireJob.m_Threat));
-  if (!physicalCover || vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), position) < 5 || BBB_Terrain.IsWaterAt(position) || BBB_Terrain.WaterAlong(utility.m_OwnerEntity.GetOrigin(), position, 5) > 0)
+  if (!BBB_OrderLeash.Allows(utility.m_BBBFireJob.m_Group, position, utility.m_BBBFireJob.m_Lease, true) || !physicalCover || vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), position) < 5 || BBB_Terrain.IsWaterAt(position) || BBB_Terrain.WaterAlong(utility.m_OwnerEntity.GetOrigin(), position, 5) > 0)
   {
    SCR_AICombatMoveRequest_Stop stop = new SCR_AICombatMoveRequest_Stop();
    stop.m_bAimAtTarget = true;
@@ -834,6 +884,8 @@ class BBB_FiringCover
 
 modded class SCR_AIUtilityComponent
 {
+ int m_iBBBReadyEpoch, m_iBBBOrderEpoch;
+ bool m_bBBBReady, m_bBBBOrderHeld;
  BBB_FireTeamJob m_BBBFireJob;
  int m_iBBBFireTeam, m_iBBBFirePhase, m_iBBBLastRounds, m_iBBBFireArrivedPhase;
  bool m_bBBBFireGeometry, m_bBBBGeometryTried, m_bBBBFlankRetried;
@@ -916,6 +968,7 @@ class BBB_AICoverFireBehavior : SCR_AISuppressBehavior
  {
   if (GetGame().GetWorld().GetWorldTime() > m_fEndMs || !m_Utility || !m_Utility.m_CombatComponent) { Complete(); return 0; }
   if (!m_BBBJob || m_Utility.m_BBBFireJob != m_BBBJob || !BBB_FireManeuver.CoversNow(m_Utility, m_BBBJob)) { Complete(); return 0; }
+  if (!BBB_OrderLeash.Allows(m_BBBJob.m_Group, m_Utility.m_OwnerEntity.GetOrigin(), m_BBBJob.m_Lease, true)) { Complete(); return 0; }
   if (!BBB.IsConscious(m_Utility.m_OwnerEntity) || BBB.PlayerOf(m_Utility.m_OwnerEntity) || BBB_OrderIntent.Blocks(m_Utility)) { Complete(); return 0; }
   if (m_Utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) { Complete(); return 0; }
   BaseTarget target = m_Utility.m_CombatComponent.GetCurrentTarget();

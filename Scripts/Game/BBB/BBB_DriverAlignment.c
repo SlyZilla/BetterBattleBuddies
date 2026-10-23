@@ -4,6 +4,7 @@ class BBB_DriverAlignmentState : Managed
 {
  IEntity m_Vehicle;
  SCR_AIGroup m_Group;
+ ref BBB_OrderLease m_Lease;
  ChimeraCharacter m_Driver;
  ChimeraCharacter m_Gunner;
  BaseCompartmentSlot m_Seat;
@@ -19,6 +20,7 @@ class BBB_DriverAlignmentState : Managed
  float m_fLastRunMs;
  float m_fLastTravel;
  string m_sEndReason;
+ string m_sEngagementReason;
  vector m_Start;
  vector m_Forward;
  bool m_bActive;
@@ -132,9 +134,8 @@ class BBB_DriverAlignment
  static bool OrdersAllow(SCR_AIGroup group, IEntity vehicle, ChimeraCharacter driver, bool checkCrew = true)
  {
   if (!group || !vehicle || BBB.Health(vehicle) <= 0 || !BBB_VehiclePosture.Controlled(driver) || BBB_Transport.VehicleOf(driver) != vehicle) return false;
-  if ((checkCrew && BBB.HasPlayer(group)) || BBB.s_Hooks.LeaveAlone(vehicle) || BBB.s_Hooks.ManagesVehicleDriving(group)) return false;
-  // Any waypoint, including an ordinary AI move, wins over an alignment.
-  if (group.GetCurrentWaypoint()) return false;
+  if ((checkCrew && BBB.HasPlayer(group)) || BBB.s_Hooks.LeaveAlone(vehicle) || !BBB_OrderLeash.DrivingAllows(group)) return false;
+  if (!BBB_OrderLeash.Allows(group, vehicle.GetOrigin())) return false;
   SCR_AIUtilityComponent utility = BBB_VehiclePosture.Utility(driver);
   if (!utility || BBB_OrderIntent.Blocks(utility)) return false;
   if (SCR_AIMoveIndividuallyBehavior.Cast(utility.GetCurrentBehavior()) || SCR_AIMoveInFormationBehavior.Cast(utility.GetCurrentBehavior())) return false;
@@ -163,22 +164,28 @@ class BBB_DriverAlignment
   return utility.m_PerceptionComponent.GetTargetPerceptionObject(cluster.m_Cluster.m_aEntities[0], ETargetCategory.ENEMY);
  }
 
+ static bool Rejected(BBB_DriverAlignmentState state, string reason)
+ {
+  if (state) state.m_sEngagementReason = reason;
+  return false;
+ }
+
  static bool Engagement(BBB_DriverAlignmentState state, out vector aim, out float excess)
  {
-  if (!state || !state.m_Seat || state.m_Seat.GetOccupant() != state.m_Gunner || !BBB_VehiclePosture.Controlled(state.m_Gunner)) return false;
+  if (!state || !state.m_Seat || state.m_Seat.GetOccupant() != state.m_Gunner || !BBB_VehiclePosture.Controlled(state.m_Gunner)) return Rejected(state, "seat");
   SCR_AIUtilityComponent utility = BBB_VehiclePosture.Utility(state.m_Gunner);
-  if (!utility || !utility.m_CombatComponent || !utility.m_PerceptionComponent || BBB_OrderIntent.Blocks(utility)) return false;
+  if (!utility || !utility.m_CombatComponent || !utility.m_PerceptionComponent || BBB_OrderIntent.Blocks(utility)) return Rejected(state, "utility-order");
   SCR_AICombatComponent combat = utility.m_CombatComponent;
   BaseTarget target = TargetOf(utility);
-  if (!target || target != state.m_Target || !target.GetTargetEntity() || target.GetTargetCategory() != ETargetCategory.ENEMY) return false;
+  if (!target || target != state.m_Target || !target.GetTargetEntity() || target.GetTargetCategory() != ETargetCategory.ENEMY) return Rejected(state, "selected-target");
   DamageManagerComponent targetDamage = target.GetDamageManagerComponent();
-  if ((targetDamage && targetDamage.IsDestroyed()) || target.IsDisarmed()) return false;
+  if ((targetDamage && targetDamage.IsDestroyed()) || target.IsDisarmed()) return Rejected(state, "target-disabled");
   // Require this gunner's own perception object and current direct exposure.
-  if (utility.m_PerceptionComponent.GetTargetPerceptionObject(target.GetTargetEntity(), ETargetCategory.ENEMY) != target) return false;
-  if (target.GetTraceFraction() < 0.999 || target.GetExposure() <= 0 || target.GetTimeSinceSeen() > 0.5) return false;
-  if (combat.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE || utility.m_PerceptionComponent.GetFriendlyInLineOfFire()) return false;
+  if (utility.m_PerceptionComponent.GetTargetPerceptionObject(target.GetTargetEntity(), ETargetCategory.ENEMY) != target) return Rejected(state, "own-perception");
+  if (target.GetTraceFraction() < 0.999 || target.GetExposure() <= 0 || target.GetTimeSinceSeen() > 0.5) return Rejected(state, "sight");
+  if (combat.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE || utility.m_PerceptionComponent.GetFriendlyInLineOfFire()) return Rejected(state, "hold-or-friendly");
   TurretControllerComponent controller = BBB_VehicleHelpers.TurretControllerOf(state.m_Seat);
-  if (!controller || BBB.Health(controller.GetOwner()) <= 0 || !controller.GetTurretComponent() || !controller.GetWeaponManager()) return false;
+  if (!controller || BBB.Health(controller.GetOwner()) <= 0 || !controller.GetTurretComponent() || !controller.GetWeaponManager()) return Rejected(state, "turret");
   // Probe abstract type/range with a separate native selector. This does not
   // alter the gunner's selector, weapon, target or fire commands, and ignores
   // direction only so the arc may be the sole missing engagement condition.
@@ -188,28 +195,28 @@ class BBB_DriverAlignment
    state.m_WeaponProbe.Init(state.m_Gunner);
    state.m_ProbeOwner = state.m_Gunner;
   }
-  if (!state.m_WeaponProbe.SelectWeaponAgainstUnitTypeAndDistance(target.GetUnitType(), target.GetDistance(), true, true)) return false;
+  if (!state.m_WeaponProbe.SelectWeaponAgainstUnitTypeAndDistance(target.GetUnitType(), target.GetDistance(), true, true)) return Rejected(state, "weapon-selection");
   BaseWeaponComponent selected;
   BaseMagazineComponent selectedMagazine;
   int muzzleId;
   state.m_WeaponProbe.GetSelectedWeapon(selected, muzzleId, selectedMagazine);
-  if (!selected || selected != controller.GetWeaponManager().GetCurrentWeapon()) return false;
+  if (!selected || selected != controller.GetWeaponManager().GetCurrentWeapon()) return Rejected(state, "loaded-weapon");
   array<BaseMuzzleComponent> muzzles = {};
   selected.GetMuzzlesList(muzzles);
-  if (!muzzles.IsIndexValid(muzzleId)) return false;
+  if (!muzzles.IsIndexValid(muzzleId)) return Rejected(state, "muzzle-index");
   BaseMuzzleComponent muzzle = muzzles[muzzleId];
-  if (!muzzle || (muzzle.GetAmmoCount() <= 0 && !muzzle.IsCurrentBarrelChambered())) return false;
+  if (!muzzle || (muzzle.GetAmmoCount() <= 0 && !muzzle.IsCurrentBarrelChambered())) return Rejected(state, "ammo");
   // Suitability must describe what is loaded now, not a better spare magazine.
-  if (selectedMagazine != muzzle.GetMagazine() || BBB_Armour.Useless(target, selectedMagazine)) return false;
+  if (selectedMagazine != muzzle.GetMagazine() || BBB_Armour.Useless(target, selectedMagazine)) return Rejected(state, "magazine");
   float minRange, maxRange;
   bool direct;
   state.m_WeaponProbe.GetSelectedWeaponProperties(minRange, maxRange, direct);
-  if (!direct || maxRange <= 0 || target.GetDistance() < minRange || target.GetDistance() > maxRange) return false;
+  if (!direct || maxRange <= 0 || target.GetDistance() < minRange || target.GetDistance() > maxRange) return Rejected(state, "range");
   aim = target.GetLastSeenPosition() + Vector(0, 1, 0);
-  if (!ClearLine(state.m_Vehicle, target.GetTargetEntity(), state.m_Gunner.GetOrigin() + Vector(0, 1.4, 0), aim)) return false;
-  if (!ClearLine(state.m_Vehicle, target.GetTargetEntity(), selected.GetOwner().GetOrigin(), aim)) return false;
+  if (!ClearLine(state.m_Vehicle, target.GetTargetEntity(), state.m_Gunner.GetOrigin() + Vector(0, 1.4, 0), aim)) return Rejected(state, "crew-line");
+  if (!ClearLine(state.m_Vehicle, target.GetTargetEntity(), selected.GetOwner().GetOrigin(), aim)) return Rejected(state, "weapon-line");
   vector outside = controller.GetTurretComponent().GetAimingAngleExcess(aim);
-  if (Math.AbsFloat(outside[1]) > 0.5) return false;
+  if (Math.AbsFloat(outside[1]) > 0.5) return Rejected(state, "elevation");
   excess = outside[0];
   return true;
  }
@@ -332,6 +339,7 @@ class BBB_DriverAlignment
    if (Math.AbsFloat(heading) > 60 || heading * excess <= 0 || !Protection(state, excess) || !OpenGround(vehicle)) continue;
    AIControlComponent ai = AIControlComponent.Cast(driver.FindComponent(AIControlComponent));
    if (!ai || !ai.IsAIActivated()) continue;
+   state.m_Lease = BBB_OrderLeash.Capture(group);
    state.m_Start = vehicle.GetOrigin();
    state.m_Forward = vehicle.GetTransformAxis(2);
    state.m_fStarted = now;
@@ -392,7 +400,7 @@ class BBB_DriverAlignment
   foreach (BBB_DriverAlignmentState state : s_States)
   {
    if (!state.m_bActive) continue;
-   if (!s_bOn || !OrdersAllow(state.m_Group, state.m_Vehicle, state.m_Driver, false) || !BBB_VehiclePosture.Controlled(state.m_Gunner) || !ContactStillValid(state) || now - state.m_fStarted >= MAX_RUN_MS || vector.Distance(state.m_Vehicle.GetOrigin(), state.m_Start) >= MAX_TRAVEL_M)
+   if (!s_bOn || !state.m_Vehicle || !BBB_OrderLeash.Allows(state.m_Group, state.m_Vehicle.GetOrigin(), state.m_Lease) || !OrdersAllow(state.m_Group, state.m_Vehicle, state.m_Driver, false) || !BBB_VehiclePosture.Controlled(state.m_Gunner) || !ContactStillValid(state) || now - state.m_fStarted >= MAX_RUN_MS || vector.Distance(state.m_Vehicle.GetOrigin(), state.m_Start) >= MAX_TRAVEL_M)
    { state.m_sEndReason = "contact-order-or-bound"; End(state); continue; }
    Physics physics = state.m_Vehicle.GetPhysics();
    if (!physics || physics.GetVelocity().Length() > 1.0 || Math.AbsFloat(Bearing(state.m_Forward, state.m_Vehicle.GetTransformAxis(2))) > MAX_TURN_DEG)
@@ -405,7 +413,7 @@ class BBB_DriverAlignment
     bool protectedPosture = Protection(state, state.m_fDirection * 2);
     bool open = OpenGround(state.m_Vehicle);
     if (!canEngage || Math.AbsFloat(excess) <= 0.1 || excess * state.m_fDirection <= 0 || !protectedPosture || !open)
-    { state.m_sEndReason = string.Format("engage=%1 excess=%2 protection=%3 open=%4", canEngage, excess, protectedPosture, open); End(state); continue; }
+    { state.m_sEndReason = string.Format("engage=%1 excess=%2 protection=%3 open=%4 gate=%5", canEngage, excess, protectedPosture, open, state.m_sEngagementReason); End(state); continue; }
     state.m_fNextCheck = now + 250;
    }
    CarControllerComponent car = CarControllerComponent.Cast(state.m_Vehicle.FindComponent(CarControllerComponent));

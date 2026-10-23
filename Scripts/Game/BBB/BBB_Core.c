@@ -45,6 +45,9 @@ class BBB_Hooks : Managed
  bool AllowDoorUnstick(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
+ // Binding host orders always outrank tactical deviations. Existing driving hosts
+ // remain conservative until they explicitly override this policy.
+ bool IsBinding(SCR_AIGroup group) { return ManagesVehicleDriving(group); }
  // Something dropped on the ground that the host may clean up later.
  void OnLitter(IEntity item) {}
 }
@@ -65,6 +68,7 @@ class BBB
   if (s_bStarted || !Replication.IsServer()) return;
 		s_bStarted = true;
 		BBB_Perf.Read();
+  BBB_OrderLeash.Read();
 		BBB_Rearm.Read();
 		BBB_Morale.Read();
 		BBB_Smoke.Read();
@@ -108,6 +112,7 @@ class BBB
   BBB_ArmorReaction.Stop();
   BBB_Think.Stop();
   BBB_DoorUnstick.Stop();
+  BBB_OrderLeash.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -120,6 +125,8 @@ class BBB
  static void Tick()
  {
   int t = System.GetTickCount();
+  BBB_OrderLeash.Tick();
+  t = BBB_Perf.Lap("tick.orderLeash", t);
   BBB_CrewTurnout.Tick();
   t = BBB_Perf.Lap("tick.crewTurnout", t);
   BBB_DriverAlignment.Tick();

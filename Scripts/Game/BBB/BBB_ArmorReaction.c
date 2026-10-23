@@ -12,6 +12,7 @@ class BBB_ArmorEscape : Managed
  IEntity m_Vehicle;
  ChimeraCharacter m_Driver;
  SCR_AIGroup m_Group;
+ ref BBB_OrderLease m_Lease;
  SCR_AIUtilityComponent m_Utility;
  AIControlComponent m_Control;
  vector m_Start;
@@ -74,10 +75,18 @@ class BBB_ArmorReaction
  static bool Allowed(IEntity vehicle, SCR_AIGroup group, SCR_AIUtilityComponent utility)
  {
   if (!s_bOn || !BBB.IsStarted() || !vehicle || !group || !utility || BBB.Health(vehicle) <= 0) return false;
-  if (BBB_Unstick.ArmorBusy(vehicle) || BBB_Armour.Aircraft(vehicle) || PlayerAboard(vehicle) || group.GetCurrentWaypoint()) return false;
-  if (BBB.s_Hooks.LeaveAlone(vehicle) || BBB.s_Hooks.ManagesVehicleDriving(group) || !BBB.s_Hooks.AllowArmorReaction(group)) return false;
+  if (BBB_Unstick.ArmorBusy(vehicle) || BBB_Armour.Aircraft(vehicle) || PlayerAboard(vehicle) || !BBB_OrderLeash.Allows(group, vehicle.GetOrigin())) return false;
+  if (BBB.s_Hooks.LeaveAlone(vehicle) || !BBB_OrderLeash.DrivingAllows(group) || !BBB.s_Hooks.AllowArmorReaction(group)) return false;
   ChimeraCharacter driver = Driver(vehicle);
   if (!driver || !BBB_VehicleHelpers.IsAble(driver) || driver != utility.m_OwnerEntity || BBB_OrderIntent.Blocks(utility)) return false;
+  if (group.GetCurrentWaypoint())
+  {
+   Physics motion = vehicle.GetPhysics();
+   if (!motion || motion.GetVelocity().Length() > 3) return false;
+   AICarMovementComponent movement = AICarMovementComponent.Cast(vehicle.FindComponent(AICarMovementComponent));
+   if (movement && !movement.HasCompletedRequest(false)) return false;
+   if (SCR_AIMoveIndividuallyBehavior.Cast(utility.GetCurrentBehavior()) || SCR_AIMoveInFormationBehavior.Cast(utility.GetCurrentBehavior())) return false;
+  }
   CharacterControllerComponent cc = driver.GetCharacterController();
   return cc && !cc.IsPlayerControlled();
  }
@@ -296,6 +305,7 @@ class BBB_ArmorReaction
   escape.m_Vehicle = vehicle;
   escape.m_Driver = driver;
   escape.m_Group = group;
+  escape.m_Lease = BBB_OrderLeash.Capture(group);
   escape.m_Utility = utility;
   escape.m_Control = control;
   escape.m_Start = vehicle.GetOrigin();
@@ -387,7 +397,7 @@ class BBB_ArmorReaction
   for (int i = s_Escapes.Count() - 1; i >= 0; i--)
   {
    BBB_ArmorEscape escape = s_Escapes[i];
-   bool valid = Allowed(escape.m_Vehicle, escape.m_Group, escape.m_Utility) && Driver(escape.m_Vehicle) == escape.m_Driver;
+   bool valid = escape.m_Vehicle && BBB_OrderLeash.Allows(escape.m_Group, escape.m_Vehicle.GetOrigin(), escape.m_Lease) && Allowed(escape.m_Vehicle, escape.m_Group, escape.m_Utility) && Driver(escape.m_Vehicle) == escape.m_Driver;
    if (valid) valid = escape.m_Control && !escape.m_Control.IsAIActivated();
    if (valid) valid = now - escape.m_Started < 6500 && vector.Distance(escape.m_Start, escape.m_Vehicle.GetOrigin()) < 7;
    if (valid)

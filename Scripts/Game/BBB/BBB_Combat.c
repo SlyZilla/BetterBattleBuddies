@@ -375,3 +375,20 @@ modded class SCR_AICombatMoveLogic_Attack
 		return Math.Min(wait, BBB_Combat.BOUND_PAUSE_S);
 	}
 }
+
+// A suppression behavior can be replaced between utility evaluation and its BT
+// input read. Missing aim data must fail the task, never fabricate a volume or
+// throw a VM exception. Valid native inputs retain the original implementation.
+modded class SCR_AIGetSuppressionVolumeCenterPosition
+{
+ override ENodeResult EOnTaskSimulate(AIAgent owner, float dt)
+ {
+  SCR_AISuppressionVolumeBase volume;
+  if (BBB.IsStarted() && (!GetVariableIn("SuppressionVolume", volume) || !volume))
+  {
+   BBB_Perf.Count("suppression.missingVolume");
+   return ENodeResult.FAIL;
+  }
+  return super.EOnTaskSimulate(owner, dt);
+ }
+}

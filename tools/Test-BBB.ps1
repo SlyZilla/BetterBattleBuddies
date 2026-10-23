@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','crewstays','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath,
  [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120,
@@ -80,6 +80,8 @@ $flags.flares = '-bbbFlareTest 1 -bbbPerf 1'
 $timeouts.flares = 150
 $flags.think = '-bbbThinkTest 1 -bbbThink 2'
 $timeouts.think = 130
+$flags.orderleash = '-bbbOrderLeashTest 1 -bbbPerf 1'
+$timeouts.orderleash = 190
 $flags.doors = '-bbbDoorTest 1 -bbbPerf 1'
 $timeouts.doors = 180
 $flags.crewstays = '-bbbCrewStaysTest 1 -bbbPerf 1'

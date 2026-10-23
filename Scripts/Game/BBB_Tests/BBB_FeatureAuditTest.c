@@ -74,6 +74,7 @@ class BBB_FeatureAuditTest : BBB_AimTest
 	ChimeraCharacter m_Gunner;
 	vector m_vGunnerStart;
 	int m_iGrenadesBefore;
+	bool m_bSavedFireManeuver;
 	int m_Checks;
 	int m_Failures;
 	int m_iStep;
@@ -180,6 +181,10 @@ class BBB_FeatureAuditTest : BBB_AimTest
 
 	void BeginAudit()
 	{
+		BBB_FireManeuver.Read();
+		m_bSavedFireManeuver = BBB_FireManeuver.s_bOn;
+		BBB_FireManeuver.s_bOn = false;
+		BBB_FireManeuver.Stop(); // keep the boarding squad inside the real static-weapon tether
 		BBB_Morale.Read(); BBB_Smoke.Read(); BBB_StaticWeapons.Read(); BBB_Grenades.Read(); BBB_Medic.Read();
 		BBB_Morale.s_bOn = false; BBB_StaticWeapons.s_bOn = false; BBB_Smoke.s_bOn = false; BBB_Grenades.s_bOn = false; BBB_Buildings.s_bOn = false; // indoor moves break the fixed outdoor throw geometry
 		vector at = BBB.Ground(Vector(3050, 0, 1700));
@@ -531,6 +536,7 @@ class BBB_FeatureAuditTest : BBB_AimTest
 	void FinishAudit()
 	{
 		RestoreHooks();
+		BBB_FireManeuver.s_bOn = m_bSavedFireManeuver;
 		if (m_Group) PrintFormat("[AUDIT] GRENADES at end [%1]", GrenadeBreakdown());
 		BBB_StaticWeapons.Stop(); BBB_Morale.Stop(); BBB_Smoke.Stop(); BBB_Grenades.Stop();
 		string verdict = "PASS";

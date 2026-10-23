@@ -1,5 +1,11 @@
 # Better Battle Buddies
 
+
+> **Source development:** `main` contains ongoing development and can be ahead of
+> the Workshop release or contain unfinished changes. For normal play, use Workshop.
+> Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+> testing and pull requests. No direct repository access is needed.
+
 [![Game: Arma Reforger](https://img.shields.io/badge/Arma-Reforger-556b2f?style=flat-square)](https://reforger.armaplatform.com/)
 [![Workshop release: 0.1.5](https://img.shields.io/badge/Workshop-0.1.5-blue?style=flat-square)](CHANGELOG.md)
 [![Standalone addon](https://img.shields.io/badge/Addon-Standalone-teal?style=flat-square)](#install-and-play)

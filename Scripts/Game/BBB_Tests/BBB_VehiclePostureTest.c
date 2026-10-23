@@ -174,7 +174,13 @@ class BBB_VehiclePostureTest : BBB_AimTest
     m_Enemy.m_aUnitPrefabSlots.Clear();
     m_Enemy.m_aUnitPrefabSlots.Insert(RIFLE_US);
     IEntity enemyBody = Spawn(RIFLE_US, enemyAt, m_Nose * -1);
-    if (enemyBody) m_Enemy.AddAIEntityToGroup(enemyBody);
+    if (enemyBody)
+    {
+     m_Enemy.AddAIEntityToGroup(enemyBody);
+     // This fixture measures an uninterrupted turn, not killing the contact.
+     ChimeraCharacter stableEnemy = ChimeraCharacter.Cast(enemyBody);
+     if (stableEnemy) stableEnemy.GetDamageManager().EnableDamageHandling(false);
+    }
    }
    Check("enemy-fixture", m_Enemy != null);
    Check("signed-bearing", Math.AbsFloat(BBB_DriverAlignment.Bearing(m_Nose, BBB_DriverAlignment.Rotated(m_Nose, 17)) - 17) < 0.1);
@@ -345,6 +351,17 @@ class BBB_VehiclePostureTest : BBB_AimTest
    }
    foreach (BaseTarget contact : contacts) PrintFormat("[BBB] ALIGNCONTACT seen=%1 trace=%2 exposure=%3 position=%4", contact.GetTimeSinceSeen(), contact.GetTraceFraction(), contact.GetExposure(), contact.GetLastSeenPosition());
    PrintFormat("[BBB] ALIGNBASELINEPERF %1", BBB_Perf.Take());
+   if (m_bCompletion)
+   {
+    // The 25 s off baseline can consume a belt before the measured turn.
+    // Refill once here, never during the turn; production ammo veto stays active.
+    BaseWeaponComponent fixtureGun = BBB_VehicleHelpers.TurretControllerOf(m_GunSeat).GetWeaponManager().GetCurrentWeapon();
+    BaseMagazineComponent fixtureBelt;
+    if (fixtureGun && fixtureGun.GetCurrentMuzzle()) fixtureBelt = fixtureGun.GetCurrentMuzzle().GetMagazine();
+    if (fixtureBelt) fixtureBelt.SetAmmoCount(fixtureBelt.GetMaxAmmoCount());
+    Check("completion-loaded-belt-fixture", fixtureBelt && fixtureBelt.GetAmmoCount() > 0 && fixtureBelt.GetAmmoCount() == fixtureBelt.GetMaxAmmoCount());
+    if (!fixtureBelt) { FinishPosture(); return; }
+   }
    BBB_DriverAlignment.s_bOn = true;
    state.m_fStableSince = GetGame().GetWorld().GetWorldTime();
    m_iPhase = 1;
@@ -361,6 +378,11 @@ class BBB_VehiclePostureTest : BBB_AimTest
     Check("completion-driver-ai-restored", restoredControl && restoredControl.IsAIActivated());
     PrintFormat("[BBB] ALIGNCOMPLETION firstExcess=%1 bestExcess=%2 runMs=%3 travel=%4", m_fFirstExcess, m_fBestExcess, state.m_fLastRunMs, state.m_fLastTravel);
     PrintFormat("[BBB] ALIGNEND reason=%1 speed=%2", state.m_sEndReason, m_Vehicle.GetPhysics().GetVelocity().Length());
+    if (state.m_Target)
+    {
+     vector targetExcess = BBB_VehicleHelpers.TurretControllerOf(m_GunSeat).GetTurretComponent().GetAimingAngleExcess(state.m_Target.GetLastSeenPosition() + Vector(0, 1, 0));
+     PrintFormat("[BBB] ALIGNFAILDETAIL alive=%1 disarmed=%2 seen=%3 trace=%4 exposure=%5 excess=%6", BBB.IsAlive(state.m_Target.GetTargetEntity()), state.m_Target.IsDisarmed(), state.m_Target.GetTimeSinceSeen(), state.m_Target.GetTraceFraction(), state.m_Target.GetExposure(), targetExcess);
+    }
     FinishPosture();
    }
    return;

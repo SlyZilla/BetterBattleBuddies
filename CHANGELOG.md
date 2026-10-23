@@ -2,6 +2,7 @@
 
 ## 0.1.6 — unreleased
 
+- Squads can make bounded reactions to nearby contacts during ordinary AI movement orders, then continue their route. Explicit player/GM orders and transport remain in charge. Use -bbbOrderLeash 0 to retain the previous waypoint restrictions.
 - Vehicle crews stay in their seats. Drivers no longer climb out under fire to open a gate (BBB opens it for them), and the driver, gunner or commander of an armed or armoured vehicle no longer bails out to treat a wounded buddy: someone on foot goes instead. Double gates now open for AI vehicles too, and armour that is under fire or near enemies opens gates well ahead so it doesn't slow down (-bbbCrewStays 0).
 
 ## 0.1.5 — released

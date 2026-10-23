@@ -3,6 +3,7 @@
 class BBB_BuildingJob : Managed
 {
  SCR_AIGroup m_Group;
+ ref BBB_OrderLease m_Lease;
  SCR_AIUtilityComponent m_Utility;
  IEntity m_Building;
  vector m_Position;
@@ -19,9 +20,10 @@ class BBB_BuildingJob : Managed
 // Re-evaluated by the native utility before selection, including between BBB ticks.
 class BBB_IndoorMove : SCR_AIMoveIndividuallyBehavior
 {
+ ref BBB_OrderLease m_OrderLease;
  override float CustomEvaluate()
  {
-  if (!BBB_Buildings.Allowed(m_Utility, false)) return 0;
+  if (!BBB_Buildings.Allowed(m_Utility, false) || !BBB_OrderLeash.Allows(BBB_Buildings.GroupOf(m_Utility), m_Utility.m_OwnerEntity.GetOrigin(), m_OrderLease)) return 0;
   return GetPriority();
  }
 }
@@ -67,7 +69,7 @@ class BBB_Buildings
  {
   if (!s_bOn || !BBB.IsStarted() || !utility || !utility.m_OwnerEntity) return false;
   SCR_AIGroup group = GroupOf(utility);
-  if (!group || group.GetCurrentWaypoint() || (inspectGroup && BBB.HasPlayer(group)) || !BBB.s_Hooks.AllowBuildings(group)) return false;
+  if (!group || !BBB_OrderLeash.Allows(group, utility.m_OwnerEntity.GetOrigin()) || (inspectGroup && BBB.HasPlayer(group)) || !BBB.s_Hooks.AllowBuildings(group)) return false;
   if (BBB_OrderIntent.Blocks(utility) || !utility.IsMilitary()) return false;
   ChimeraCharacter body = ChimeraCharacter.Cast(utility.m_OwnerEntity);
   if (!body || !BBB.IsAlive(body) || body.IsInVehicle() || BBB.PlayerOf(body) || BBB_Drag.Busy(body)) return false;
@@ -191,8 +193,10 @@ class BBB_Buildings
   IEntity building;
   SCR_AICoverLock cover;
   if (!FindIndoorCover(utility, threat, position, building, cover)) return false;
+  if (!BBB_OrderLeash.Allows(GroupOf(utility), position)) { cover.Release(); return false; }
   BBB_BuildingJob job = new BBB_BuildingJob();
   job.m_Group = GroupOf(utility);
+  job.m_Lease = BBB_OrderLeash.Capture(job.m_Group);
   job.m_Utility = utility;
   job.m_Position = position;
   job.m_Threat = threat;
@@ -203,6 +207,7 @@ class BBB_Buildings
   job.m_LastPosition = utility.m_OwnerEntity.GetOrigin();
   // Above ordinary attack selection, below native aid/grenade/retreat/danger.
   job.m_Action = new BBB_IndoorMove(utility, null, position, 91, SCR_AIActionBase.PRIORITY_LEVEL_NORMAL, null, 0.3);
+  BBB_IndoorMove.Cast(job.m_Action).m_OrderLease = job.m_Lease;
   utility.AddAction(job.m_Action);
   s_Jobs.Insert(job);
   s_iStarted++;
@@ -243,7 +248,7 @@ class BBB_Buildings
   {
    BBB_BuildingJob job = s_Jobs[i];
    vector known;
-   bool valid = groups.Contains(job.m_Group) && Allowed(job.m_Utility) && job.m_Building && job.m_Cover && job.m_Cover.IsValid();
+   bool valid = BBB_OrderLeash.Allows(job.m_Group, job.m_Position, job.m_Lease) && groups.Contains(job.m_Group) && Allowed(job.m_Utility) && job.m_Building && job.m_Cover && job.m_Cover.IsValid();
    if (valid) valid = RecentContact(job.m_Utility, known) && vector.Distance(known, job.m_Threat) < 25;
    if (valid)
    {
@@ -272,7 +277,7 @@ class BBB_Buildings
      SCR_AICoverLock nextCover;
      if (FindIndoorCover(job.m_Utility, known, nextPosition, nextBuilding, nextCover))
      {
-      if (nextBuilding == job.m_Building && vector.Distance(nextPosition, job.m_Position) >= 3)
+      if (BBB_OrderLeash.Allows(job.m_Group, nextPosition, job.m_Lease) && nextBuilding == job.m_Building && vector.Distance(nextPosition, job.m_Position) >= 3)
       {
        job.m_Action.Fail();
        if (job.m_Utility.m_CombatMoveState.GetAssignedCover() == job.m_Cover) job.m_Utility.m_CombatMoveState.ReleaseCover();
@@ -285,6 +290,7 @@ class BBB_Buildings
        job.m_Steps++;
        s_iClearingSteps++;
        job.m_Action = new BBB_IndoorMove(job.m_Utility, null, nextPosition, 91, 0, null, 0.3);
+       BBB_IndoorMove.Cast(job.m_Action).m_OrderLease = job.m_Lease;
        job.m_Utility.AddAction(job.m_Action);
       }
       else nextCover.Release();

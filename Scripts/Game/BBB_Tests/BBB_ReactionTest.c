@@ -238,6 +238,12 @@ class BBB_ReactionTest : BBB_AimTest
   m_Hooks.m_Veto = false;
   Assert("building-null-safe", !BBB_Buildings.Begin(null, enemyPos));
   Assert("no-roof-outdoors", !BBB_Buildings.RoofAt(m_InfantryStart));
+  BuildingFixtureReady();
+ }
+
+ // Derived acceptance fixtures may install an order after native setup completes.
+ void BuildingFixtureReady()
+ {
   m_At = Now();
   GetGame().GetCallqueue().CallLater(ObserveBuilding, 1000, true);
  }

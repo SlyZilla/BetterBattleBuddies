@@ -160,12 +160,13 @@ class BBB_FireManeuverTest : BBB_AimTest
    pruning.SeedPruneCheck(doomed, m_Lane.m_A.m_Group, Now() + 120);
    float deadline = Now() + 120;
    BBB_FireManeuver.SeedDeletionCheck(doomed, deadJob, m_Lane.m_A.m_Group, deadline);
+   bool deletionRegistered = doomed && BBB_FireManeuver.Job(doomed) == deadJob && BBB_FireManeuver.DeletionDeadline(doomed) == deadline;
    if (doomed) SCR_EntityHelper.DeleteEntityAndChildren(doomed);
-   CheckFM("deleted group key decays", !doomed && !deadJob.m_Group);
+   CheckFM("deleted group key decays", deletionRegistered && !doomed && !deadJob.m_Group);
    BBB_FireManeuver.Tick();
    CheckFM("deleted job pruned while native survivor stays active", BBB_FireManeuver.Job(m_Lane.m_A.m_Group) == activeJob && BBB_FireManeuver.DeletionJobCount() == 1);
    CheckFM("unrelated group cooldown survives deletion", BBB_FireManeuver.DeletionDeadline(m_Lane.m_A.m_Group) == deadline);
-   CheckFM("deleted cooldown key removed by index", BBB_FireManeuver.DeletionCooldownCount() == 1);
+   CheckFM("deleted cooldown key removed by index", !BBB_FireManeuver.DeletionHasDeadCooldown() && BBB_FireManeuver.DeletionDeadline(m_Lane.m_A.m_Group) == deadline);
    array<SCR_AIGroup> keptGroups = {m_Lane.m_A.m_Group};
    pruning.RunPruneCheck(keptGroups, Now());
    CheckFM("combat wake map drops deleted key and retains survivor", pruning.PruneWakeCount() == 1 && pruning.PruneWakeUntil(m_Lane.m_A.m_Group) == deadline);
@@ -442,7 +443,12 @@ modded class BBB_FireManeuver
   s_Next.Set(survivor, deadline);
  }
  static int DeletionJobCount() { return s_Jobs.Count(); }
- static int DeletionCooldownCount() { return s_Next.Count(); }
+ static bool DeletionHasDeadCooldown()
+ {
+  for (int i = 0; i < s_Next.Count(); i++)
+   if (!s_Next.GetKey(i)) return true;
+  return false;
+ }
  static float DeletionDeadline(SCR_AIGroup group) { return s_Next.Get(group); }
 }
 
