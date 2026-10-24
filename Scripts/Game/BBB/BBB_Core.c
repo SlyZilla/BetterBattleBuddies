@@ -43,6 +43,8 @@ class BBB_Hooks : Managed
  bool AllowArmorReaction(SCR_AIGroup group) { return true; }
  // Swinging a house door that has a soldier of this group jammed in the doorway.
  bool AllowDoorUnstick(SCR_AIGroup group) { return true; }
+ // Radio contact reports may reach this group (vanilla may then send fireteams to look).
+ bool AllowContactRelay(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Binding host orders always outrank tactical deviations. Existing driving hosts
@@ -80,6 +82,7 @@ class BBB
   BBB_ExposedFire.Read();
   BBB_Think.Read();
   BBB_DoorUnstick.Read();
+  BBB_ContactRelay.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -112,6 +115,7 @@ class BBB
   BBB_ArmorReaction.Stop();
   BBB_Think.Stop();
   BBB_DoorUnstick.Stop();
+  BBB_ContactRelay.Stop();
   BBB_OrderLeash.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
@@ -167,6 +171,8 @@ class BBB
   t = BBB_Perf.Lap("tick.armorReaction", t);
   BBB_DoorUnstick.Tick();
   t = BBB_Perf.Lap("tick.doorUnstick", t);
+  BBB_ContactRelay.Tick();
+  t = BBB_Perf.Lap("tick.contactRelay", t);
   BBB_Think.Tick();
 		BBB_Perf.OnTick();
  }

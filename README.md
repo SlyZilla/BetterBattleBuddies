@@ -78,6 +78,7 @@ Server owners can disable features individually:
 | `-bbbBuildings 0` | Contact-driven indoor cover movement |
 | `-bbbFlares 0` | BBB's autonomous night-illumination requests |
 | `-bbbDoorUnstick 0` | Opening or flipping doors that block movement |
+| `-bbbContactRelay 0` | Squads sharing spotted enemies by radio |
 | `-bbbCrewTurnout 0` | Quiet-period crew turnout and danger-driven buttoning up |
 | `-bbbDriverAlign 0` | Small idle-driver adjustments for a gunner's visible target |
 | `-bbbArmorReaction 0` | Fitted smoke and guarded wheeled-vehicle reversal against launcher fire |

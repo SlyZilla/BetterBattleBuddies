@@ -2,6 +2,7 @@
 
 ## 0.1.6 — unreleased
 
+- Squads warn each other by radio. When a squad spots enemies, friendly squads within its radio range (about 1.3 km with personal radios, 2 km with a manpack) hear about it a few seconds later and react as if they'd heard the shooting: they turn to it, take cover or send a fireteam to look. A report is only where the enemy was last seen, never a target to shoot at, and it isn't passed on again. Squads without a radio only hear each other within shouting distance. Player-led squads and squads under a player's or Game Master's order are left alone (-bbbContactRelay 0).
 - Squads can make bounded reactions to nearby contacts during ordinary AI movement orders, then continue their route. Explicit player/GM orders and transport remain in charge. Use -bbbOrderLeash 0 to retain the previous waypoint restrictions.
 - Vehicle crews stay in their seats. Drivers no longer climb out under fire to open a gate (BBB opens it for them), and the driver, gunner or commander of an armed or armoured vehicle no longer bails out to treat a wounded buddy: someone on foot goes instead. Double gates now open for AI vehicles too, and armour that is under fire or near enemies opens gates well ahead so it doesn't slow down (-bbbCrewStays 0).
 
