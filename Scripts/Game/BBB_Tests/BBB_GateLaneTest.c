@@ -3,8 +3,9 @@
 // sphere opened 1080 garage/barn/container doors in 20 min, and the bed check teleported men
 // standing beside angled trucks. Uses a real Arland marked gate ("OpenGate") and the nearest
 // real wide door without that action, and a parked Ural transport placed around them:
-// marked gate beside the lane still opens; an unmarked wide door in the lane opens; the same
-// door 12 m to the side or behind does not, unless it is the driver's navlink. Bed: a point on
+// a door in the lane opens (marked gate or unmarked wide door); 12 m to the side or behind it
+// does not, unless it is the driver's navlink; a building door (they carry "OpenGate" too) opens
+// only as the navlink. Bed: a point on
 // the truck's bed counts; the same height 1.5 m beside the truck, turned 45 degrees (inside its
 // world box), does not; 3 m above the roof does not.
 // Not covered: the door swing itself (crewstays covers it) and a convoy driving through a town.
@@ -12,7 +13,7 @@ class BBB_GateLaneTest : BBB_AimTest
 {
  static ref BBB_GateLaneTest s_GateTest;
  static const ResourceName URAL = "{16C1F16C9B053801}Prefabs/Vehicles/Wheeled/Ural4320/Ural4320_transport.et";
- static const int EXPECTED = 10;
+ static const int EXPECTED = 13;
  protected int m_iChecks;
  protected int m_iFailures;
  protected vector m_SearchFrom;
@@ -20,6 +21,8 @@ class BBB_GateLaneTest : BBB_AimTest
  protected float m_fGateDistance = float.MAX;
  protected IEntity m_Wide;
  protected float m_fWideDistance = float.MAX;
+ protected IEntity m_House;   // a building door that carries the same "OpenGate" action
+ protected float m_fHouseDistance = float.MAX;
  protected IEntity m_Truck;
 
  static void MaybeStartGateLane()
@@ -41,13 +44,26 @@ class BBB_GateLaneTest : BBB_AimTest
   PrintFormat("[BBB] GATELANETEST CHECK %1 %2 %3", name, res, detail);
  }
 
+ // A door carrying the "OpenGate" smart action (house doors carry it too, so the gate opener
+ // no longer trusts it; here it only picks fixtures).
+ protected static bool MarkedGate(IEntity entity)
+ {
+  if (SCR_AISmartActionHandling.FindSmartAction(entity, "OpenGate", false) != null) return true;
+  IEntity parent = entity.GetParent();
+  return parent != null && SCR_AISmartActionHandling.FindSmartAction(parent, "OpenGate", false) != null;
+ }
+
  protected bool CollectDoors(IEntity entity)
  {
   if (!entity.FindComponent(BaseDoorComponent)) return true;
   float distance = vector.DistanceXZ(entity.GetOrigin(), m_SearchFrom);
-  if (BBB_VehicleHelpers.MarkedGate(entity))
+  if (MarkedGate(entity))
   {
-   if (distance < m_fGateDistance) { m_fGateDistance = distance; m_Gate = entity; }
+   if (BBB_VehicleHelpers.OpeningWidth(entity) < BBB_VehicleHelpers.GATE_MIN_WIDTH)
+   {
+    if (distance < m_fHouseDistance) { m_fHouseDistance = distance; m_House = entity; }
+   }
+   else if (distance < m_fGateDistance) { m_fGateDistance = distance; m_Gate = entity; }
    return true;
   }
   vector mins, maxs;
@@ -91,9 +107,11 @@ class BBB_GateLaneTest : BBB_AimTest
   if (m_Gate) gateWhere = string.Format("%1 at %2", m_Gate.GetPrefabData().GetPrefabName(), m_Gate.GetOrigin());
   string wideWhere = "none";
   if (m_Wide) wideWhere = string.Format("%1 at %2", m_Wide.GetPrefabData().GetPrefabName(), m_Wide.GetOrigin());
-  Check("doors-found", m_Gate != null && m_Wide != null, "gate " + gateWhere + ", wide " + wideWhere);
+  string houseWhere = "none";
+  if (m_House) houseWhere = m_House.GetOrigin().ToString();
+  Check("doors-found", m_Gate != null && m_Wide != null && m_House != null, "gate " + gateWhere + ", wide " + wideWhere + ", building door " + houseWhere);
   m_Truck = Spawn(URAL, BBB.Ground(m_SearchFrom), Vector(0, 0, 1));
-  if (!m_Gate || !m_Wide || !m_Truck) { Finish(); return; }
+  if (!m_Gate || !m_Wide || !m_House || !m_Truck) { Finish(); return; }
   GetGame().GetCallqueue().CallLater(Measure, 2000);
  }
 
@@ -109,8 +127,13 @@ class BBB_GateLaneTest : BBB_AimTest
   Check("wide-behind-shut", !BBB_VehicleHelpers.OpensFor(m_Truck, m_Wide, null, reach), "10 m behind");
   Park(m_Wide, heading, 20, 12);
   Check("wide-navlink-opens", BBB_VehicleHelpers.OpensFor(m_Truck, m_Wide, m_Wide, reach), "12 m to the side, reported as the driver's navlink");
+  Park(m_House, heading, 20, 0);
+  Check("building-door-in-lane-shut", !BBB_VehicleHelpers.OpensFor(m_Truck, m_House, null, reach), "building door with OpenGate, 20 m ahead");
+  Check("building-door-navlink-opens", BBB_VehicleHelpers.OpensFor(m_Truck, m_House, m_House, reach), "same door reported as the driver's navlink");
+  Park(m_Gate, heading, 20, 0);
+  Check("marked-gate-in-lane-opens", BBB_VehicleHelpers.OpensFor(m_Truck, m_Gate, null, reach), "marked gate 20 m ahead");
   Park(m_Gate, heading, 20, 12);
-  Check("marked-gate-beside-opens", BBB_VehicleHelpers.OpensFor(m_Truck, m_Gate, null, reach), "marked gate 12 m to the side");
+  Check("marked-gate-beside-shut", !BBB_VehicleHelpers.OpensFor(m_Truck, m_Gate, null, reach), "marked gate 12 m to the side");
 
   // Truck beds: the Ural turned 45 degrees in open ground.
   Place(BBB.Ground(m_SearchFrom + Vector(0, 0, 60)), 45);

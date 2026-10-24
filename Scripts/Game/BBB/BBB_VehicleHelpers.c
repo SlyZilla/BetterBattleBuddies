@@ -106,22 +106,6 @@ class BBB_VehicleHelpers : Managed
   return true;
  }
 
- // A door the game's AI treats as a vehicle gate (its "OpenGate" smart action): each leaf of a
- // double gate is narrower than GATE_MIN_WIDTH (Arland: 1.5 m), so width alone skipped them.
- // Cached per door: house doors near every vehicle are looked at every second (perf 21 Oct:
- // uncached, tick.vehicleHelpers went from ~1.2 to ~2.8 ms).
- protected static ref map<IEntity, bool> s_mMarkedGate = new map<IEntity, bool>();
- static bool MarkedGate(IEntity entity)
- {
-  if (!entity) return false;
-  bool marked;
-  if (s_mMarkedGate.Find(entity, marked)) return marked;
-  marked = SCR_AISmartActionHandling.FindSmartAction(entity, "OpenGate", false) != null;
-  if (!marked && entity.GetParent()) marked = SCR_AISmartActionHandling.FindSmartAction(entity.GetParent(), "OpenGate", false) != null;
-  s_mMarkedGate.Set(entity, marked);
-  return marked;
- }
-
  // The AI driver's reported navlink obstacle, or one of its child leaves.
  protected static bool IsNavlinkDoor(IEntity entity, IEntity navlink)
  {
@@ -129,18 +113,43 @@ class BBB_VehicleHelpers : Managed
   return entity == navlink || entity.GetParent() == navlink;
  }
 
- // Whether a door found ahead of the vehicle is one to open for it. Doors the game marks as
- // vehicle gates open from the whole look-ahead. Any other wide door (garages, barns, hangars,
- // container doors) only when the AI driver reports it as its obstacle or it is right in the
- // vehicle's lane: the look-ahead sphere alone swung every big door in town open as convoys
- // passed (Everon soak 23 Oct: 1080 doors in 20 min).
+ // The opening a door closes: its own leaf or, for a double gate, the thin door set it sits in
+ // (Arland ammo-dump gate: 1.48 m leaves in a 2.97 m frame). A deeper parent is the building
+ // itself, not the opening.
+ static const float FRAME_MAX_DEPTH = 2.5;
+ static float OpeningWidth(IEntity door)
+ {
+  vector mins, maxs;
+  door.GetBounds(mins, maxs);
+  float width = Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]);
+  IEntity frame = door.GetParent();
+  if (!frame) return width;
+  frame.GetBounds(mins, maxs);
+  if (Math.Min(maxs[0] - mins[0], maxs[2] - mins[2]) >= FRAME_MAX_DEPTH) return width;
+  return Math.Max(width, Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]));
+ }
+
+ // Why a door was opened and what it is, for the GATE log line (only built when printing).
+ protected static string Describe(IEntity entity, IEntity navlink)
+ {
+  string why = "in lane";
+  if (IsNavlinkDoor(entity, navlink)) why = "navlink";
+  why = string.Format("%1, %2 m opening", why, OpeningWidth(entity).ToString(3, 1));
+  IEntity named = entity;
+  while (named && (!named.GetPrefabData() || named.GetPrefabData().GetPrefabName().IsEmpty())) named = named.GetParent();
+  string prefab = "?";
+  if (named) prefab = FilePath.StripPath(named.GetPrefabData().GetPrefabName());
+  return why + ", " + prefab;
+ }
+
+ // Whether a door found ahead of the vehicle is one to open for it: the obstacle the AI driver
+ // reports, or a vehicle-wide opening (GATE_MIN_WIDTH) right in the vehicle's lane. The
+ // look-ahead sphere alone swung every door in town open as convoys passed (Everon soaks 23-24
+ // Oct: 1080 doors in 20 min, 2831 in 2 h; the "OpenGate" action it trusted is on house doors).
  static bool OpensFor(IEntity vehicle, IEntity entity, IEntity navlink, float reach)
  {
-  if (MarkedGate(entity)) return true;
-  vector mins, maxs;
-  entity.GetBounds(mins, maxs);
-  if (Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) < GATE_MIN_WIDTH) return false;
   if (IsNavlinkDoor(entity, navlink)) return true;
+  if (OpeningWidth(entity) < GATE_MIN_WIDTH) return false;
   vector wmins, wmaxs;
   entity.GetWorldBounds(wmins, wmaxs);
   vector offset = (wmins + wmaxs) * 0.5 - vehicle.GetOrigin();
@@ -196,8 +205,8 @@ class BBB_VehicleHelpers : Managed
    if (!OpensFor(vehicle, entity, navlink, lookAhead + lookRadius)) continue;
    door.SetControlValue(1, RplId.Invalid());
    if (plough) BBB_Perf.Count("crewStays.armourGate");
-   if (plough) PrintFormat("[ACR] GATE opened ahead of %1 at %2 (armour, not safe: drives through)", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
-   else PrintFormat("[ACR] GATE opened ahead of %1 at %2", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
+   if (plough) PrintFormat("[ACR] GATE opened ahead of %1 at %2 (armour, not safe: drives through; %3)", BBB.s_Hooks.NameOf(group), entity.GetOrigin(), Describe(entity, navlink));
+   else PrintFormat("[ACR] GATE opened ahead of %1 at %2 (%3)", BBB.s_Hooks.NameOf(group), entity.GetOrigin(), Describe(entity, navlink));
   }
  }
 
