@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','gatelane','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath,
  [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120,
@@ -86,6 +86,8 @@ $flags.doors = '-bbbDoorTest 1 -bbbPerf 1'
 $timeouts.doors = 180
 $flags.crewstays = '-bbbCrewStaysTest 1 -bbbPerf 1'
 $timeouts.crewstays = 120
+$flags.gatelane = '-bbbGateLaneTest 1'
+$timeouts.gatelane = 90
 $world = '{AC230926A00100E0}Worlds/BBB_TestArland.ent'
 if ($Preset -eq 'compile') { $world = '{77C41EA429B6AC35}worlds/GameMaster/GM_Arland.ent' }
 $argsLine = '-server "' + $world + '" -addonsDir "' + (Split-Path $AddonRoot -Parent) + '" -addons BBB0261015000001 -profile "' + $profile + '" -maxFPS 60 -noBackend ' + $flags[$Preset] + ' ' + $ExtraArgs

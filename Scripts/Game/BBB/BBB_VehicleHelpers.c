@@ -12,6 +12,7 @@ class BBB_VehicleHelpers : Managed
  static const float LOOK_AHEAD = 25;    // m in front of the vehicle: the AI driver stops
  static const float LOOK_RADIUS = 25;   // for a gate up to ~45 m ahead
  static const float GATE_MIN_WIDTH = 2.2; // smaller doors are house doors: left alone
+ static const float LANE_HALF_WIDTH = 4.5; // unmarked wide doors: only this far either side of the vehicle's line
  static const float ARMOUR_LOOK_AHEAD = 50;  // armour not safe: a gate up to ~80 m ahead
  static const float ARMOUR_LOOK_RADIUS = 30;
  static const float ARMOUR_ALERT_M = 400;
@@ -25,6 +26,8 @@ class BBB_VehicleHelpers : Managed
 
  protected ref array<IEntity> m_Found = {};
  protected ref map<IEntity, int> m_OnBed = new map<IEntity, int>();
+ protected ref map<IEntity, vector> m_OnBedAt = new map<IEntity, vector>(); // where he was at the last sample
+ static const float BED_MOVING_M = 0.6;  // m moved in a second: still getting down, not stuck
  protected ref map<IEntity, vector> m_StallPos = new map<IEntity, vector>();
  protected ref map<IEntity, float> m_StallSince = new map<IEntity, float>();
  protected ref map<IEntity, int> m_Unsticks = new map<IEntity, int>();
@@ -59,19 +62,40 @@ class BBB_VehicleHelpers : Managed
   array<IEntity> handledVehicles = {};
   array<IEntity> replacedVehicles = {};
   array<IEntity> watchedVehicles = {};
+  // Per-part timings (Everon soak 23 Oct: the stage averaged 1.4-2.9 ms per tick on its own).
+  int gates, beds, doors, gunners, driving;
   foreach (SCR_AIGroup group : groups)
   {
    if (!group) continue;
+   int t = System.GetTickCount();
    OpenGatesFor(group);
+   int now = System.GetTickCount();
+   gates += now - t;
+   t = now;
    GetOffBeds(group);
+   now = System.GetTickCount();
+   beds += now - t;
+   t = now;
    CloseDoors(group, handledVehicles);
+   now = System.GetTickCount();
+   doors += now - t;
+   t = now;
    ReplaceGunnerFor(group, replacedVehicles);
+   now = System.GetTickCount();
+   gunners += now - t;
+   t = now;
    if (!BBB.s_Hooks.ManagesVehicleDriving(group))
    {
     CheckTacticalDismountFor(group);
     WatchDrivingFor(group, watchedVehicles);
    }
+   driving += System.GetTickCount() - t;
   }
+  BBB_Perf.Add("tick.vh.gates", gates);
+  BBB_Perf.Add("tick.vh.beds", beds);
+  BBB_Perf.Add("tick.vh.doors", doors);
+  BBB_Perf.Add("tick.vh.gunners", gunners);
+  BBB_Perf.Add("tick.vh.driving", driving);
  }
 
  // ---------------------------------------------------------------- gates
@@ -96,6 +120,33 @@ class BBB_VehicleHelpers : Managed
   if (!marked && entity.GetParent()) marked = SCR_AISmartActionHandling.FindSmartAction(entity.GetParent(), "OpenGate", false) != null;
   s_mMarkedGate.Set(entity, marked);
   return marked;
+ }
+
+ // The AI driver's reported navlink obstacle, or one of its child leaves.
+ protected static bool IsNavlinkDoor(IEntity entity, IEntity navlink)
+ {
+  if (!navlink) return false;
+  return entity == navlink || entity.GetParent() == navlink;
+ }
+
+ // Whether a door found ahead of the vehicle is one to open for it. Doors the game marks as
+ // vehicle gates open from the whole look-ahead. Any other wide door (garages, barns, hangars,
+ // container doors) only when the AI driver reports it as its obstacle or it is right in the
+ // vehicle's lane: the look-ahead sphere alone swung every big door in town open as convoys
+ // passed (Everon soak 23 Oct: 1080 doors in 20 min).
+ static bool OpensFor(IEntity vehicle, IEntity entity, IEntity navlink, float reach)
+ {
+  if (MarkedGate(entity)) return true;
+  vector mins, maxs;
+  entity.GetBounds(mins, maxs);
+  if (Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) < GATE_MIN_WIDTH) return false;
+  if (IsNavlinkDoor(entity, navlink)) return true;
+  vector wmins, wmaxs;
+  entity.GetWorldBounds(wmins, wmaxs);
+  vector offset = (wmins + wmaxs) * 0.5 - vehicle.GetOrigin();
+  float along = vector.Dot(offset, vehicle.GetTransformAxis(2));
+  float across = Math.AbsFloat(vector.Dot(offset, vehicle.GetTransformAxis(0)));
+  return along >= 0 && along <= reach && across <= LANE_HALF_WIDTH;
  }
 
  protected void OpenGatesFor(SCR_AIGroup group)
@@ -142,9 +193,7 @@ class BBB_VehicleHelpers : Managed
   {
    BaseDoorComponent door = BaseDoorComponent.Cast(entity.FindComponent(BaseDoorComponent));
    if (!door || door.IsOpen() || door.IsOpening()) continue;
-   vector mins, maxs;
-   entity.GetBounds(mins, maxs);
-   if (Math.Max(maxs[0] - mins[0], maxs[2] - mins[2]) < GATE_MIN_WIDTH && !MarkedGate(entity)) continue;
+   if (!OpensFor(vehicle, entity, navlink, lookAhead + lookRadius)) continue;
    door.SetControlValue(1, RplId.Invalid());
    if (plough) BBB_Perf.Count("crewStays.armourGate");
    if (plough) PrintFormat("[ACR] GATE opened ahead of %1 at %2 (armour, not safe: drives through)", BBB.s_Hooks.NameOf(group), entity.GetOrigin());
@@ -154,16 +203,31 @@ class BBB_VehicleHelpers : Managed
 
  // ---------------------------------------------------------------- truck beds
 
+ // Inside the vehicle's outline and no higher than standing on it, in the vehicle's own frame:
+ // its world box also covers men standing beside a vehicle parked at an angle, and men on a
+ // balcony above one (Everon soak 23 Oct: 13 teleports in 5 drop-offs).
+ static bool OnTopOf(IEntity vehicle, vector at)
+ {
+  vector mins, maxs;
+  vehicle.GetBounds(mins, maxs);
+  vector local = vehicle.CoordToLocal(at);
+  if (local[0] < mins[0] || local[0] > maxs[0] || local[2] < mins[2] || local[2] > maxs[2]) return false;
+  return local[1] >= mins[1] && local[1] <= maxs[1] + 0.5;
+ }
+
  protected IEntity m_BedVehicle;
  protected vector m_BedSoldier;
  protected bool CollectVehicleUnder(IEntity entity)
  {
-  if (!Vehicle.Cast(entity)) return true;
-  vector mins, maxs;
-  entity.GetWorldBounds(mins, maxs);
-  if (m_BedSoldier[0] < mins[0] || m_BedSoldier[0] > maxs[0] || m_BedSoldier[2] < mins[2] || m_BedSoldier[2] > maxs[2]) return true;
+  if (!Vehicle.Cast(entity) || !OnTopOf(entity, m_BedSoldier)) return true;
   m_BedVehicle = entity;
   return false;
+ }
+
+ protected void ForgetBed(IEntity soldier)
+ {
+  m_OnBed.Remove(soldier);
+  m_OnBedAt.Remove(soldier);
  }
 
  protected void GetOffBeds(SCR_AIGroup group)
@@ -173,17 +237,21 @@ class BBB_VehicleHelpers : Managed
   foreach (AIAgent agent : agents)
   {
    ChimeraCharacter soldier = ChimeraCharacter.Cast(agent.GetControlledEntity());
-   if (!soldier || !BBB.IsAlive(soldier) || BBB_Transport.VehicleOf(soldier) || BBB.PlayerOf(soldier)) { m_OnBed.Remove(soldier); continue; }
+   if (!soldier || !BBB.IsAlive(soldier) || BBB_Transport.VehicleOf(soldier) || BBB.PlayerOf(soldier)) { ForgetBed(soldier); continue; }
    vector at = soldier.GetOrigin();
-   if (at[1] - GetGame().GetWorld().GetSurfaceY(at[0], at[2]) < BED_HEIGHT) { m_OnBed.Remove(soldier); continue; }
+   if (at[1] - GetGame().GetWorld().GetSurfaceY(at[0], at[2]) < BED_HEIGHT) { ForgetBed(soldier); continue; }
    m_BedVehicle = null;
    m_BedSoldier = at;
    GetGame().GetWorld().QueryEntitiesBySphere(at, 6, CollectVehicleUnder);
-   if (!m_BedVehicle) { m_OnBed.Remove(soldier); continue; }
+   if (!m_BedVehicle) { ForgetBed(soldier); continue; }
+   // Climbing down takes him somewhere: only a man who stays put up there is stuck.
+   vector last;
+   if (m_OnBedAt.Find(soldier, last) && vector.DistanceXZ(last, at) > BED_MOVING_M) m_OnBed.Remove(soldier);
+   m_OnBedAt.Set(soldier, at);
    int seen = m_OnBed.Get(soldier) + 1;
    m_OnBed.Set(soldier, seen);
    if (seen < 4) continue; // getting out takes a moment: only those still up there after 4 s
-   m_OnBed.Remove(soldier);
+   ForgetBed(soldier);
    // Down beside the vehicle, on the side he is nearer to.
    vector side = m_BedVehicle.GetTransformAxis(0);
    if (vector.Dot(at - m_BedVehicle.GetOrigin(), side) < 0) side = side * -1;
