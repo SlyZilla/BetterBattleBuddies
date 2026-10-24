@@ -8,7 +8,7 @@
 class BBB_ThinkTest : BBB_AimTest
 {
  static ref BBB_ThinkTest s_ThinkTest;
- static const int EXPECTED = 17;
+ static const int EXPECTED = 18;
  protected int m_iChecks;
  protected int m_iFailures;
  protected SCR_AIGroup m_Us;
@@ -76,6 +76,12 @@ class BBB_ThinkTest : BBB_AimTest
   BBB_ThinkLog ring = BBB_Think.LogOf(b);
   bool capped = ring && ring.m_Lines.Count() == BBB_Think.LINES && ring.m_Lines[0].m_sText == "n8" && ring.m_Lines[BBB_Think.LINES - 1].m_sText == "n19";
   Check("ring-capped", capped, "");
+  array<string> brief = {};
+  vector briefTarget;
+  BBB_Think.Describe(b, GetGame().GetWorld().GetWorldTime(), brief, briefTarget, 3);
+  int briefNotes = 0;
+  foreach (string briefLine : brief) if (briefLine.Contains("Test: n")) briefNotes++;
+  Check("overlay-notes-limited", briefNotes == 3 && brief.Count() > 3 && brief[brief.Find("this soldier:") + 1].Contains("n19"), string.Format("%1 notes", briefNotes));
 
   BBB_Think.s_bOn = false;
   BBB_Think.Note(c, "Test", "should not land");

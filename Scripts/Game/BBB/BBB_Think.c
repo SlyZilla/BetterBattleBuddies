@@ -2,10 +2,10 @@
 // soldier or squad notes what it decided and why, including when it decided NOT to act
 // ("skipped grenade: no confirmed enemy position"). The last few notes per soldier and per
 // squad are kept in a small ring. With the overlay on, look at an AI soldier (the one
-// nearest the centre of your view, up to 500 m) and a panel shows his vanilla behaviour,
-// threat state, current target, whether a player order holds BBB back, and both logs; a
-// label floats over him and an arrow points at where he last saw his target. The pick is
-// sticky until you look at another soldier.
+// nearest the centre of your view, up to 500 m) and a small card (BBB_ThinkOverlay) shows his
+// vanilla behaviour, threat state, current target, whether a player order holds BBB back and
+// his latest notes; a dot marks him and a red dot his target's last seen spot. The pick is
+// sticky until you look at another soldier; the card hides while he is off screen.
 // Only where the AI runs and someone looks: single player, Workbench or a listen host (on a
 // dedicated server there is no camera; -bbbThink 2 still prints the notes to the log).
 // Host option: -bbbThink 1 (notes + overlay), 2 (also "[BBB] THINK" log lines); off by default.
@@ -57,6 +57,7 @@ class BBB_Think
  {
   s_Logs.Clear();
   s_Picked = null;
+  BBB_ThinkOverlay.Remove();
   s_fNextPick = 0;
   s_fNextPrune = 0;
  }
@@ -192,6 +193,7 @@ class BBB_Think
    if (looked) s_Picked = looked;
   }
   if (s_Picked) Draw(world, s_Picked, now);
+  else BBB_ThinkOverlay.Hide();
  }
 
  // The AI soldier nearest the centre of the view (null: none close enough to it).
@@ -248,10 +250,10 @@ class BBB_Think
   return string.Format("%1s", Math.Round(seconds));
  }
 
- protected static void AddLines(BBB_ThinkLog entry, float now, notnull array<string> lines)
+ protected static void AddLines(BBB_ThinkLog entry, float now, notnull array<string> lines, int maxNotes = LINES)
  {
   if (!entry) return;
-  for (int i = entry.m_Lines.Count() - 1; i >= 0; i--)
+  for (int i = entry.m_Lines.Count() - 1; i >= 0 && i >= entry.m_Lines.Count() - maxNotes; i--)
   {
    BBB_ThinkLine line = entry.m_Lines[i];
    string repeats = "";
@@ -261,7 +263,7 @@ class BBB_Think
  }
 
  // What the panel shows for one soldier (tests read it too).
- static void Describe(IEntity soldier, float now, notnull array<string> lines, out vector targetAt)
+ static void Describe(IEntity soldier, float now, notnull array<string> lines, out vector targetAt, int maxNotes = LINES)
  {
   lines.Clear();
   targetAt = vector.Zero;
@@ -269,7 +271,7 @@ class BBB_Think
   if (!BBB.IsAlive(soldier))
   {
    lines.Insert("dead or gone");
-   AddLines(LogOf(soldier), now, lines);
+   AddLines(LogOf(soldier), now, lines, maxNotes);
    return;
   }
   AIControlComponent control = AIControlComponent.Cast(soldier.FindComponent(AIControlComponent));
@@ -280,7 +282,7 @@ class BBB_Think
   if (!utility)
   {
    lines.Insert("no AI brain (player or empty)");
-   AddLines(LogOf(soldier), now, lines);
+   AddLines(LogOf(soldier), now, lines, maxNotes);
    return;
   }
   lines.Insert("doing: " + BehaviourName(utility.GetCurrentBehavior()));
@@ -303,27 +305,27 @@ class BBB_Think
   }
   else lines.Insert("target: none");
   lines.Insert("this soldier:");
-  AddLines(LogOf(soldier), now, lines);
+  AddLines(LogOf(soldier), now, lines, maxNotes);
   AIGroup group = agent.GetParentGroup();
   if (group)
   {
    lines.Insert("his squad (" + Who(group) + "):");
-   AddLines(LogOf(group), now, lines);
+   AddLines(LogOf(group), now, lines, maxNotes);
   }
  }
 
+ // The card's text changes at most every pick period; positions follow every frame.
+ protected static float s_fNextText;
  protected static void Draw(World world, IEntity soldier, float now)
  {
-  array<string> lines = {};
   vector targetAt;
-  Describe(soldier, now, lines, targetAt);
-  DbgUI.Begin("BBB Think", 20, 220);
-  foreach (string line : lines) DbgUI.Text(line);
-  DbgUI.End();
-  vector head = soldier.GetOrigin() + "0 2.2 0";
-  string label = "BBB";
-  if (lines.Count() > 1) label = lines[1];
-  DebugTextWorldSpace.Create(world, label, DebugTextFlags.ONCE | DebugTextFlags.CENTER | DebugTextFlags.FACE_CAMERA, head[0], head[1], head[2], 12, 0xFFFFFFFF, 0xC0000000);
-  if (targetAt != vector.Zero) Shape.CreateArrow(soldier.GetOrigin() + "0 1.5 0", targetAt + "0 1 0", 0.3, Color.RED, ShapeFlags.ONCE | ShapeFlags.NOZBUFFER);
+  if (now >= s_fNextText || !BBB_ThinkOverlay.HasText())
+  {
+   s_fNextText = now + PICK_MS;
+   array<string> lines = {};
+   Describe(soldier, now, lines, targetAt, BBB_ThinkOverlay.NOTES);
+   BBB_ThinkOverlay.SetText(lines, targetAt);
+  }
+  BBB_ThinkOverlay.Place(world, soldier);
  }
 }
