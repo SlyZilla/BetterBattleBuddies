@@ -260,6 +260,8 @@ class BBB_FireManeuver
    if (!utility || !utility.IsMilitary() || !utility.m_OwnerEntity || !BBB.IsAlive(utility.m_OwnerEntity)) continue;
    ChimeraCharacter soldier = ChimeraCharacter.Cast(utility.m_OwnerEntity);
    if (!soldier || soldier.IsInVehicle() || soldier.GetCharacterController().IsUnconscious() || soldier.GetCharacterController().IsPlayerControlled()) continue;
+   // On a rescue, a rearm run or his way to a static gun: not counted as a rifle here.
+   if (!BBB_Claims.Can(soldier, BBB_Claims.FIRE)) continue;
    BaseWeaponManagerComponent weapons = BaseWeaponManagerComponent.Cast(soldier.FindComponent(BaseWeaponManagerComponent));
    array<IEntity> carried = {};
    if (weapons) weapons.GetWeaponsList(carried);
@@ -292,6 +294,7 @@ class BBB_FireManeuver
   job.m_fPhaseSince = now;
   foreach (int index, SCR_AIUtilityComponent member : job.m_Members)
   {
+   BBB_Claims.Take(member.m_OwnerEntity, BBB_Claims.FIRE);
    member.m_BBBFireJob = job;
    member.m_CombatMoveState.m_BBBFireOwner = member;
    member.m_iBBBFireTeam = 1;
@@ -769,9 +772,11 @@ class BBB_FireManeuver
   for (int i = job.m_Members.Count() - 1; i >= 0; i--)
   {
    SCR_AIUtilityComponent utility = job.m_Members[i];
-   if (utility && BBB.IsConscious(utility.m_OwnerEntity) && roster.Contains(utility.GetAIAgent())) continue;
+   // Renews his claim; a higher job (rescue, static gun, rearm) that took him drops him here.
+   if (utility && BBB.IsConscious(utility.m_OwnerEntity) && roster.Contains(utility.GetAIAgent()) && BBB_Claims.Take(utility.m_OwnerEntity, BBB_Claims.FIRE)) continue;
    if (utility && utility.m_BBBFireJob == job)
    {
+    BBB_Claims.Release(utility.m_OwnerEntity, BBB_Claims.FIRE);
     if (utility.m_BBBFireMove && utility.m_CombatMoveState && utility.m_CombatMoveState.GetRequest() == utility.m_BBBFireMove) utility.m_CombatMoveState.CancelRequest();
     if (utility.m_CombatMoveState) utility.m_CombatMoveState.m_BBBFireOwner = null;
     utility.m_BBBFireJob = null;
@@ -815,6 +820,7 @@ class BBB_FireManeuver
   foreach (SCR_AIUtilityComponent utility : job.m_Members)
   {
    if (!utility || utility.m_BBBFireJob != job) continue;
+   BBB_Claims.Release(utility.m_OwnerEntity, BBB_Claims.FIRE);
    if (utility.m_CombatMoveState) utility.m_CombatMoveState.m_BBBFireOwner = null;
    utility.m_BBBFireJob = null;
    utility.m_BBBFireMove = null;

@@ -150,7 +150,7 @@ class BBB_Flares
   if (!BBB.s_Hooks.AllowFlares(group) || BBB.s_Hooks.LeaveAlone(body) || BBB_OrderIntent.Blocks(utility)) return false;
   CharacterControllerComponent controller = body.GetCharacterController();
   if (!controller || controller.IsPlayerControlled() || controller.IsUnconscious() || controller.GetDisableWeaponControls()) return false;
-  if (body.IsInVehicle() || controller.IsClimbing() || controller.IsSwimming() || BBB_Drag.Busy(body)) return false;
+  if (body.IsInVehicle() || controller.IsClimbing() || controller.IsSwimming() || BBB_Drag.Busy(body) || BBB_Claims.Committed(body)) return false;
   return true;
  }
 

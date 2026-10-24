@@ -389,6 +389,7 @@ class BBB_Drag
   AceStart(healer, casualty, carry);
   job.m_Move = new BBB_AIDragMove(utility, null, spot, MOVE_PRIORITY, priorityLevel, null, 1.0);
   utility.AddAction(job.m_Move);
+  BBB_Claims.Take(healer, BBB_Claims.RESCUE);
   s_aJobs.Insert(job);
   s_iStarted++;
   string how = "drags";
@@ -415,7 +416,7 @@ class BBB_Drag
   {
    BBB_DragJob job = s_aJobs[i];
    string ended = Check(job, now);
-   if (ended.IsEmpty()) continue;
+   if (ended.IsEmpty()) { BBB_Claims.Take(job.m_Healer, BBB_Claims.RESCUE); continue; }
    Finish(job, ended);
    s_aJobs.Remove(i);
   }
@@ -478,6 +479,7 @@ class BBB_Drag
 
  static void Finish(BBB_DragJob job, string why)
  {
+  BBB_Claims.Release(job.m_Healer, BBB_Claims.RESCUE);
   if (job.m_Healer && AceLoaded() && AceBool(job.m_Healer, "ACE_IsCarrier")) AceRelease(job.m_Healer);
   if (job.m_Move && job.m_Move.GetActionState() != EAIActionState.COMPLETED && job.m_Move.GetActionState() != EAIActionState.FAILED) job.m_Move.Complete();
   if (job.m_Healer)

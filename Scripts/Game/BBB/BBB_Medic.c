@@ -447,8 +447,12 @@ class BBB_Medic
   {
    s_mGoing.Remove(healer);
    s_mGoingTo.Remove(healer);
+   // A drag the heal started keeps its own claim.
+   if (!BBB_Drag.Busy(healer)) BBB_Claims.Release(healer, BBB_Claims.RESCUE);
    return;
   }
+  // Same 4 s as Going(): the heal renews it each evaluation while he is on his way.
+  BBB_Claims.Take(healer, BBB_Claims.RESCUE, 4000);
   s_mGoing.Set(healer, NowMs());
   s_mGoingTo.Set(healer, casualty);
   StartWatching();

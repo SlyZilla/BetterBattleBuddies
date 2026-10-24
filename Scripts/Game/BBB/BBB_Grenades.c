@@ -121,7 +121,7 @@ class BBB_Grenades
 		if (utility.m_AIInfo && (utility.m_AIInfo.HasUnitState(EUnitState.IN_VEHICLE) || utility.m_AIInfo.HasUnitState(EUnitState.UNCONSCIOUS))) return false;
 
 		if (BBB_OrderIntent.Blocks(utility)) return false;
-		if (BBB_Drag.Busy(soldier)) return false;
+		if (BBB_Drag.Busy(soldier) || BBB_Claims.Committed(soldier)) return false;
 
 		return HasFragGrenade(soldier);
 	}

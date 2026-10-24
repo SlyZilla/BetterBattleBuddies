@@ -113,6 +113,7 @@ class BBB_StaticWeapons
 			if (!job) continue;
 			if (job.m_bMounted) DismountGunner(job, "BBB stopped");
 			else CancelBoarding(job, "BBB stopped");
+			BBB_Claims.Release(job.m_Gunner, BBB_Claims.STATIC);
 		}
 		s_aJobs.Clear();
 		s_mNextCheck.Clear();
@@ -314,6 +315,7 @@ class BBB_StaticWeapons
 		if (BBB_Drag.Busy(soldier)) return false;
 		// Already bounding in a fire-and-maneuver: one BBB task at a time.
 		if (utility.m_BBBFireJob) return false;
+		if (!BBB_Claims.Can(soldier, BBB_Claims.STATIC)) return false;
 
 		return true;
 	}
@@ -440,6 +442,7 @@ class BBB_StaticWeapons
 		job.m_fLastThreatInArcMs = now;
 		job.m_bMounted = false;
 		s_aJobs.Insert(job);
+		BBB_Claims.Take(gunner, BBB_Claims.STATIC);
 
 		s_iBoardingRequests++;
 		PrintFormat("[BBB] STATIC: %1 (%2) heading for static weapon %3 (%4 m)",
@@ -528,6 +531,14 @@ class BBB_StaticWeapons
 
 	// ---------------------------------------------------------------- main tick
 
+	// Drop a job and free its gunner for other BBB jobs.
+	protected static void Forget(int index)
+	{
+		BBB_StaticGunnerJob job = s_aJobs[index];
+		if (job) BBB_Claims.Release(job.m_Gunner, BBB_Claims.STATIC);
+		s_aJobs.RemoveOrdered(index);
+	}
+
 	// Why a job must end now, or "" to keep it
 	protected static string ReleaseReason(BBB_StaticGunnerJob job, float nowMs)
 	{
@@ -565,7 +576,7 @@ class BBB_StaticWeapons
 			BBB_StaticGunnerJob job = s_aJobs[j];
 			if (!job)
 			{
-				s_aJobs.RemoveOrdered(j);
+				Forget(j);
 				continue;
 			}
 
@@ -573,7 +584,7 @@ class BBB_StaticWeapons
 			if (!job.m_Gunner || !BBB.IsAlive(job.m_Gunner) || !BBB_VehicleHelpers.IsAble(job.m_Gunner))
 			{
 				if (job.m_Slot && job.m_Gunner && job.m_Slot.IsReservedBy(job.m_Gunner)) job.m_Slot.SetReserved(null);
-				s_aJobs.RemoveOrdered(j);
+				Forget(j);
 				continue;
 			}
 
@@ -596,6 +607,8 @@ class BBB_StaticWeapons
 				else
 				{
 					string pendingReason = ReleaseReason(job, nowMs);
+					// A rescue (drag, medic) outranks walking to the gun: he goes there instead.
+					if (pendingReason == "" && !BBB_Claims.Take(job.m_Gunner, BBB_Claims.STATIC)) pendingReason = "taken for " + BBB_Claims.Name(BBB_Claims.Role(job.m_Gunner));
 					if (pendingReason == "")
 					{
 						bool behaviourOver = !job.m_GetIn;
@@ -611,7 +624,7 @@ class BBB_StaticWeapons
 					if (pendingReason != "")
 					{
 						CancelBoarding(job, pendingReason);
-						s_aJobs.RemoveOrdered(j);
+						Forget(j);
 					}
 					continue;
 				}
@@ -629,7 +642,7 @@ class BBB_StaticWeapons
 					s_iWeaponsReleased++;
 					PrintFormat("[BBB] STATIC: %1 left static weapon %2 on his own", job.m_Gunner, job.m_StaticWeapon);
 					BBB_Think.Note(job.m_Gunner, "Static", "left the static weapon on his own");
-					s_aJobs.RemoveOrdered(j);
+					Forget(j);
 				}
 				continue;
 			}
@@ -638,9 +651,13 @@ class BBB_StaticWeapons
 			if (reason != "")
 			{
 				DismountGunner(job, reason);
-				s_aJobs.RemoveOrdered(j);
+				Forget(j);
 			}
 		}
+
+		// Seated gunners stay claimed while the job runs (pending ones renew above).
+		foreach (BBB_StaticGunnerJob held : s_aJobs)
+			if (held && held.m_bMounted) BBB_Claims.Take(held.m_Gunner, BBB_Claims.STATIC);
 
 		if (!s_bOn) return;
 

@@ -470,6 +470,7 @@ class BBB_Rearm
   }
   s_mTargetCorpse.Remove(soldier);
   s_mTripStarted.Remove(soldier);
+  BBB_Claims.Release(soldier, BBB_Claims.REARM);
  }
 
  static bool InRearmAction(ChimeraCharacter soldier)
@@ -528,6 +529,8 @@ class BBB_Rearm
    }
    CharacterControllerComponent controller = soldier.GetCharacterController();
    if (!controller || controller.IsPlayerControlled() || !s_bOn || !BBB.IsAlive(soldier) || BBB.PlayerOf(soldier) || !group || !groups.Contains(group) || BBB.HasPlayer(group) || BBB_OrderIntent.Blocks(utility)) CancelRearmAction(soldier);
+   // Still on his way: keep him (a higher job that took him is seen in CheckRearmFor).
+   else if (BBB_Claims.Can(soldier, BBB_Claims.REARM)) BBB_Claims.Take(soldier, BBB_Claims.REARM);
   }
   float nowMs = GetGame().GetWorld().GetWorldTime();
   PruneFailures(nowMs);
@@ -586,6 +589,12 @@ class BBB_Rearm
     CancelRearmAction(soldier);
     continue;
    }
+   // Taken for a rescue or a static gun: that job has him now.
+   if (!BBB_Claims.Can(soldier, BBB_Claims.REARM))
+   {
+    CancelRearmAction(soldier);
+    continue;
+   }
    if (s_mNextRearmCheck.Contains(soldier) && nowMs < s_mNextRearmCheck.Get(soldier)) continue;
    if (utility && utility.m_ThreatSystem)
    {
@@ -639,6 +648,7 @@ class BBB_Rearm
      SCR_AIMoveIndividuallyBehavior moveAction = new SCR_AIMoveIndividuallyBehavior(utility, null, corpse.GetOrigin(), priority: SCR_AIActionBase.PRIORITY_BEHAVIOR_MOVE_INDIVIDUALLY + 5, ent: corpse, radius: 2.0);
      s_mRearmAction.Set(soldier, moveAction);
      utility.AddAction(moveAction);
+     BBB_Claims.Take(soldier, BBB_Claims.REARM);
     }
    }
   }
@@ -650,6 +660,7 @@ class BBB_Rearm
   {
    if (act && act.GetActionState() != EAIActionState.COMPLETED && act.GetActionState() != EAIActionState.FAILED)
     act.Complete();
+   BBB_Claims.Release(s, BBB_Claims.REARM);
   }
   s_mRearmAction.Clear();
   s_mTripStarted.Clear();

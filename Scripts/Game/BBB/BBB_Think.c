@@ -296,6 +296,8 @@ class BBB_Think
   string order = "no";
   if (BBB_OrderIntent.Held(utility)) order = "YES (BBB stands back)";
   lines.Insert(string.Format("in cover: %1   player order: %2", cover, order));
+  int role = BBB_Claims.Role(soldier);
+  if (role != BBB_Claims.NONE) lines.Insert("BBB job: " + BBB_Claims.Name(role));
   BaseTarget target;
   if (utility.m_CombatComponent) target = utility.m_CombatComponent.GetCurrentTarget();
   if (target && target.GetTargetEntity())

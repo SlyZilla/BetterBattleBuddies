@@ -719,7 +719,7 @@ class BBB_VehicleHelpers : Managed
     {
      ChimeraCharacter ch = ChimeraCharacter.Cast(agent.GetControlledEntity());
      if (!ch || ch.IsInVehicle() || !IsAble(ch) || BBB.PlayerOf(ch)) continue;
-     if (BBB_Drag.Busy(ch) || BBB_Medic.s_mGoingTo.Contains(ch)) continue;
+     if (BBB_Drag.Busy(ch) || BBB_Medic.s_mGoingTo.Contains(ch) || BBB_Claims.Committed(ch)) continue;
      CompartmentAccessComponent acc = ch.GetCompartmentAccessComponent();
      if (!acc || acc.IsGettingIn() || acc.IsGettingOut()) continue;
      float d = vector.DistanceXZ(ch.GetOrigin(), vehicle.GetOrigin());

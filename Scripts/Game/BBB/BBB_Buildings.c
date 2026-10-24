@@ -78,6 +78,8 @@ class BBB_Buildings
   AIControlComponent control = AIControlComponent.Cast(body.FindComponent(AIControlComponent));
   if (!control || !control.IsAIActivated()) return false;
   if (BBB_Morale.IsWithdrawing(group) || utility.m_BBBFireJob) return false;
+  // Any other BBB job outranks moving indoors (and takes a man already inside).
+  if (!BBB_Claims.Can(body, BBB_Claims.BUILDINGS)) return false;
   return true;
  }
 
@@ -209,6 +211,7 @@ class BBB_Buildings
   job.m_Action = new BBB_IndoorMove(utility, null, position, 91, SCR_AIActionBase.PRIORITY_LEVEL_NORMAL, null, 0.3);
   BBB_IndoorMove.Cast(job.m_Action).m_OrderLease = job.m_Lease;
   utility.AddAction(job.m_Action);
+  BBB_Claims.Take(utility.m_OwnerEntity, BBB_Claims.BUILDINGS);
   s_Jobs.Insert(job);
   s_iStarted++;
   return true;
@@ -220,6 +223,7 @@ class BBB_Buildings
   if (job.m_Utility && job.m_Utility.m_CombatMoveState && job.m_Utility.m_CombatMoveState.GetAssignedCover() == job.m_Cover) job.m_Utility.m_CombatMoveState.ReleaseCover();
   else if (job.m_Cover) job.m_Cover.Release();
   if (job.m_Utility) s_Retry.Set(job.m_Utility, GetGame().GetWorld().GetWorldTime() + 30000);
+  if (job.m_Utility) BBB_Claims.Release(job.m_Utility.m_OwnerEntity, BBB_Claims.BUILDINGS);
  }
 
  static void Stop()
@@ -252,6 +256,7 @@ class BBB_Buildings
    if (valid) valid = RecentContact(job.m_Utility, known) && vector.Distance(known, job.m_Threat) < 25;
    if (valid)
    {
+    BBB_Claims.Take(job.m_Utility.m_OwnerEntity, BBB_Claims.BUILDINGS);
     vector here = job.m_Utility.m_OwnerEntity.GetOrigin();
     if (vector.Distance(here, job.m_LastPosition) > 0.75) { job.m_LastPosition = here; job.m_Progress = now; }
     if (job.m_Arrived == 0 && vector.Distance(here, job.m_Position) <= 1.3 && RoofAt(here) == job.m_Building)
