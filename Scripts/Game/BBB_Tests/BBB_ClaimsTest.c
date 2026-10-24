@@ -9,17 +9,15 @@ class BBB_ClaimsTestHooks : BBB_Hooks
 // and FireManeuver (held off until then) is switched on in the same second: Rearm sends him
 // to dead squadmates 24 m back just as FireManeuver looks for four riflemen to bound.
 // Team A uses role claims; team B is on the vanilla list (the old per-feature guards).
-// B (old): FireManeuver enlists the man on his live ammo run; Rearm then sees the fire job
-// and drops the run. A: while Rearm holds him, FireManeuver doesn't count him.
-// What this does NOT show (measured 24 Oct): a better outcome for the player. Under attack
-// the rearm move (move-individually +5) never runs ahead of the attack behaviour, and Rearm
-// drops the run itself when he swaps weapons, so FireManeuver gets him a few seconds later
-// with claims on as well. The end state is printed, not asserted.
+// A: while Rearm holds him, FireManeuver doesn't count him. Both teams (claims-independent,
+// 24 Oct): a man with no spare magazine is never put in a bound, his run beats attacking, so
+// he reaches the bodies under contact and comes back with magazines. B shows the same run
+// without claims.
 // Buildings, StaticWeapons, Morale, throws and relay are off so only this pair acts.
 class BBB_ClaimsTest : BBB_AimTest
 {
  static ref BBB_ClaimsTest s_Claims;
- static const int EXPECTED = 11;
+ static const int EXPECTED = 14;
  ref BBB_ClaimsTestHooks m_Hooks;
  ref BBB_Hooks m_SavedHooks;
  ref array<SCR_AIGroup> m_Teams = {};
@@ -270,10 +268,12 @@ class BBB_ClaimsTest : BBB_AimTest
   // Long enough for FireManeuver's 4 s admissions and a 22 m walk.
   if (m_Wait < 35) return;
   ClaimCheck("rearm-trip-on", m_bTripSeen[0], string.Format("vanilla trip seen %1", m_bTripSeen[1]));
-  ClaimCheck("vanilla-fire-job-enlists-runner-on-run", m_Overlap[1] >= 1, string.Format("%1 s on a live run in a fire job", m_Overlap[1]));
   ClaimCheck("on-fire-job-leaves-runner-on-run", m_Overlap[0] == 0 && m_FireWhileHeld[0] == 0, string.Format("%1 s on a live run in a fire job, %2 s while held for rearm", m_Overlap[0], m_FireWhileHeld[0]));
   ClaimCheck("on-run-claimed", m_RearmClaimed[0] >= 1, string.Format("%1 s", m_RearmClaimed[0]));
-  PrintFormat("[BBB] CLAIMSTEST end state (not asserted): spare mags A %1 / B %2, closest to a body A %3 m / B %4 m, empty in a fire job A %5 s / B %6 s", SpareMags(m_Runner[0]), SpareMags(m_Runner[1]), m_Closest[0].ToString(4, 1), m_Closest[1].ToString(4, 1), m_InFire[0], m_InFire[1]);
+  ClaimCheck("never-bounds-empty", m_InFire[0] == 0 && m_InFire[1] == 0, string.Format("in a fire job with no spare magazine: A %1 s, B %2 s", m_InFire[0], m_InFire[1]));
+  ClaimCheck("on-runner-reached-bodies", m_Closest[0] <= BBB_Rearm.LOOT_REACH_M + 0.5, string.Format("closest %1 m", m_Closest[0].ToString(4, 1)));
+  ClaimCheck("on-runner-rearmed", SpareMags(m_Runner[0]) > 0, string.Format("spare mags %1", SpareMags(m_Runner[0])));
+  ClaimCheck("vanilla-runner-rearmed", SpareMags(m_Runner[1]) > 0, string.Format("spare mags %1, closest %2 m", SpareMags(m_Runner[1]), m_Closest[1].ToString(4, 1)));
   BBB_Claims.s_bOn = false;
   bool offTake = BBB_Claims.Take(m_Runner[0], BBB_Claims.BUILDINGS) && BBB_Claims.Can(m_Runner[0], BBB_Claims.BUILDINGS) && BBB_Claims.Role(m_Runner[0]) == BBB_Claims.NONE && !BBB_Claims.Committed(m_Runner[0]);
   BBB_Claims.s_bOn = true;

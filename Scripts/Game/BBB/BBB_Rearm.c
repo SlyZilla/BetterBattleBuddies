@@ -57,21 +57,20 @@ class BBB_Rearm
   SCR_InventoryStorageManagerComponent inv = SCR_InventoryStorageManagerComponent.Cast(soldier.FindComponent(SCR_InventoryStorageManagerComponent));
   BaseWeaponManagerComponent wm = BaseWeaponManagerComponent.Cast(soldier.FindComponent(BaseWeaponManagerComponent));
   if (!inv || !wm) return false;
-  BaseWeaponComponent weapon = wm.GetCurrentWeapon();
-  if (!weapon)
+  // His main gun, whatever he holds right now (a pistol or launcher in hand used to end the run).
+  BaseWeaponComponent weapon;
+  array<IEntity> weapons = {};
+  wm.GetWeaponsList(weapons);
+  foreach (IEntity wEnt : weapons)
   {
-   array<IEntity> weapons = {};
-   wm.GetWeaponsList(weapons);
-   foreach (IEntity wEnt : weapons)
+   BaseWeaponComponent w = BaseWeaponComponent.Cast(wEnt.FindComponent(BaseWeaponComponent));
+   if (w && (w.GetWeaponType() == EWeaponType.WT_RIFLE || w.GetWeaponType() == EWeaponType.WT_MACHINEGUN || w.GetWeaponType() == EWeaponType.WT_SNIPERRIFLE))
    {
-    BaseWeaponComponent w = BaseWeaponComponent.Cast(wEnt.FindComponent(BaseWeaponComponent));
-    if (w && (w.GetWeaponType() == EWeaponType.WT_RIFLE || w.GetWeaponType() == EWeaponType.WT_MACHINEGUN || w.GetWeaponType() == EWeaponType.WT_SNIPERRIFLE))
-    {
-     weapon = w;
-     break;
-    }
+    weapon = w;
+    break;
    }
   }
+  if (!weapon) weapon = wm.GetCurrentWeapon();
   if (!weapon) return false;
   array<BaseMuzzleComponent> muzzles = {};
   weapon.GetMuzzlesList(muzzles);
@@ -90,6 +89,14 @@ class BBB_Rearm
   if (curMag) inGun = curMag.GetAmmoCount();
   if (outCount == 0 && inGun == 0) return true;
   return outCount < CRITICAL_MAGAZINE_COUNT;
+ }
+
+ // No spare magazine left for his main gun: the fight can't wait for him to find one.
+ static bool OutOfSpares(ChimeraCharacter soldier)
+ {
+  BaseMuzzleComponent muzzle;
+  int count;
+  return NeedsAmmo(soldier, muzzle, count) && count == 0;
  }
 
  static bool NeedsAntiArmor(ChimeraCharacter soldier, SCR_AIGroup group)
@@ -583,8 +590,9 @@ class BBB_Rearm
     CancelRearmAction(soldier);
     continue;
    }
-   // A bounding or withdrawing man isn't sent to loot a body mid-move.
-   if ((utility && utility.m_BBBFireJob) || BBB_Morale.IsWithdrawing(group))
+   // A bounding or withdrawing man isn't sent to loot a body mid-move, unless he is out of
+   // spares: then the run outranks the bound (claims drop him from the fire team).
+   if ((utility && utility.m_BBBFireJob && !OutOfSpares(soldier)) || BBB_Morale.IsWithdrawing(group))
    {
     CancelRearmAction(soldier);
     continue;
@@ -645,7 +653,11 @@ class BBB_Rearm
      if (curAction && actionActive) curAction.Fail();
      s_mTargetCorpse.Set(soldier, corpse);
      s_mTripStarted.Set(soldier, nowMs);
-     SCR_AIMoveIndividuallyBehavior moveAction = new SCR_AIMoveIndividuallyBehavior(utility, null, corpse.GetOrigin(), priority: SCR_AIActionBase.PRIORITY_BEHAVIOR_MOVE_INDIVIDUALLY + 5, ent: corpse, radius: 2.0);
+     // Out of spares in a fight, the run beats attacking (90) like Buildings' indoor move (91);
+     // danger, medical and player orders still outrank it. Otherwise it waits for a lull.
+     float tripPriority = SCR_AIActionBase.PRIORITY_BEHAVIOR_MOVE_INDIVIDUALLY + 5;
+     if (OutOfSpares(soldier)) tripPriority = Math.Max(tripPriority, 91);
+     SCR_AIMoveIndividuallyBehavior moveAction = new SCR_AIMoveIndividuallyBehavior(utility, null, corpse.GetOrigin(), priority: tripPriority, ent: corpse, radius: 2.0);
      s_mRearmAction.Set(soldier, moveAction);
      utility.AddAction(moveAction);
      BBB_Claims.Take(soldier, BBB_Claims.REARM);

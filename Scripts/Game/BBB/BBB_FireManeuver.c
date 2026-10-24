@@ -262,6 +262,8 @@ class BBB_FireManeuver
    if (!soldier || soldier.IsInVehicle() || soldier.GetCharacterController().IsUnconscious() || soldier.GetCharacterController().IsPlayerControlled()) continue;
    // On a rescue, a rearm run or his way to a static gun: not counted as a rifle here.
    if (!BBB_Claims.Can(soldier, BBB_Claims.FIRE)) continue;
+   // No spare magazine: he'd bound with what's in the gun. Rearm sends him for more instead.
+   if (BBB_Rearm.s_bOn && BBB_Rearm.OutOfSpares(soldier)) continue;
    BaseWeaponManagerComponent weapons = BaseWeaponManagerComponent.Cast(soldier.FindComponent(BaseWeaponManagerComponent));
    array<IEntity> carried = {};
    if (weapons) weapons.GetWeaponsList(carried);
