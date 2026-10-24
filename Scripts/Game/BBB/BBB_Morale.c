@@ -29,6 +29,7 @@ class BBB_GroupMoraleState : Managed
 	float m_fPhaseSince;
 	bool m_bWithdrawing;
 	vector m_vThreatCenter;
+	vector m_vAwayFrom;             // point the bounds back away from: the threat, or BBB_Squad's way out
 	vector m_vRetrogradeDir;
 	vector m_vWithdrawPos;
 	ref array<SCR_AIUtilityComponent> m_TeamCover = {};
@@ -61,6 +62,7 @@ class BBB_Morale
 	// Tunable thresholds
 	static float s_fCasualtyThreshold = 0.50;
 	static float s_fSuppressionThreshold = 0.60;
+	static float s_fBreakScore = 0.70; // tests may lower it
 	static float s_fRetrogradeBoundDist = 25.0;
 	static float s_fMaxWithdrawDist = 90.0;
 
@@ -139,6 +141,19 @@ class BBB_Morale
 		return false;
 	}
 
+	// The squad's current (or last) withdrawal: the threat it backs away from and its bound end.
+	static bool WithdrawOrder(SCR_AIGroup group, out vector threat, out vector destination)
+	{
+		foreach (BBB_GroupMoraleState state : s_States)
+		{
+			if (!state || state.m_Group != group || state.m_fBrokenSince <= 0) continue;
+			threat = state.m_vThreatCenter;
+			destination = state.m_vWithdrawPos;
+			return true;
+		}
+		return false;
+	}
+
 	// ---------------------------------------------------------------- threat queries
 
 	// Centroid of currently perceived enemy contacts, using native perception memory only.
@@ -146,6 +161,8 @@ class BBB_Morale
 	{
 		outThreatCenter = vector.Zero;
 		if (!group) return false;
+		// The squad's main front, not the average of every report (BBB_Squad).
+		if (BBB_Squad.On(group)) return BBB_Squad.Threat(group, 15.0, outThreatCenter);
 
 		array<AIAgent> agents = {};
 		BBB.s_Hooks.GetMembers(group, agents);
@@ -384,6 +401,15 @@ class BBB_Morale
 	}
 
 	// Ground actually gained away from the threat since the bound began (never negative)
+	// With the squad picture: back away from the widest gap's far side, not one group (moving
+	// straight away from one front can walk into the other).
+	protected static vector AwayFrom(SCR_AIGroup group, vector squadCenter, vector threatCenter)
+	{
+		vector escape;
+		if (BBB_Squad.On(group) && BBB_Squad.Escape(group, 15.0, escape)) return squadCenter - escape * 100.0;
+		return threatCenter;
+	}
+
 	static float GainAway(vector boundStart, vector now, vector threatCenter)
 	{
 		vector away = boundStart - threatCenter;
@@ -415,7 +441,8 @@ class BBB_Morale
 		if (!SquadCenter(state.m_Group, squadCenter)) return;
 
 		state.m_vThreatCenter = threatCenter;
-		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, threatCenter, s_fRetrogradeBoundDist);
+		state.m_vAwayFrom = AwayFrom(state.m_Group, squadCenter, threatCenter);
+		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
 		state.m_bWithdrawing = true;
 		state.m_fBrokenSince = now;
 		state.m_fPhaseSince = now;
@@ -547,7 +574,7 @@ class BBB_Morale
 			EndWithdrawal(state, now, false, "squad gone", 0);
 			return;
 		}
-		float gain = GainAway(state.m_vBoundStart, squadCenter, state.m_vThreatCenter);
+		float gain = GainAway(state.m_vBoundStart, squadCenter, state.m_vAwayFrom);
 		state.m_fTotalWithdrawn = state.m_fTotalWithdrawn + gain;
 		if (gain < MIN_BOUND_GAIN_M) state.m_iStalledBounds++;
 		else state.m_iStalledBounds = 0;
@@ -584,7 +611,8 @@ class BBB_Morale
 		// Continue withdrawal: swap roles and bound again
 		state.m_iCoverTeam = 1 - state.m_iCoverTeam;
 		state.m_vThreatCenter = threatCenter;
-		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, threatCenter, s_fRetrogradeBoundDist);
+		state.m_vAwayFrom = AwayFrom(state.m_Group, squadCenter, threatCenter);
+		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
 
 		ExecuteBoundingPhase(state);
 	}
@@ -752,7 +780,7 @@ class BBB_Morale
 			}
 
 			// Check if morale broke and threat exists
-			if (state.m_fMorale >= 0.70 && aliveCount > 0 && now >= state.m_fNextWithdrawAllowed)
+			if (state.m_fMorale >= s_fBreakScore && aliveCount > 0 && now >= state.m_fNextWithdrawAllowed)
 			{
 				vector threatCenter;
 				if (GetThreatCentroid(group, threatCenter))

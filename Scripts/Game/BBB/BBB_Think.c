@@ -312,6 +312,8 @@ class BBB_Think
   if (group)
   {
    lines.Insert("his squad (" + Who(group) + "):");
+   string picture = BBB_Squad.Describe(SCR_AIGroup.Cast(group));
+   if (picture != "") lines.Insert(picture);
    AddLines(LogOf(group), now, lines, maxNotes);
   }
  }

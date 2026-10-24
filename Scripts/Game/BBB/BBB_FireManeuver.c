@@ -253,6 +253,9 @@ class BBB_FireManeuver
   vector seen;
   int fresh;
   SCR_AIUtilityComponent mg;
+  // Of the members' own reports, aim the job at the one on the squad's main front.
+  vector front;
+  bool hasFront = BBB_Squad.On(group) && BBB_Squad.Threat(group, BBB_Squad.RECENT_S, front);
   foreach (AIAgent agent : agents)
   {
    if (!agent) continue;
@@ -278,7 +281,11 @@ class BBB_FireManeuver
    }
    if (!armed) continue;
    vector known;
-   if (Detected(utility, known)) { if (fresh == 0) seen = known; fresh++; }
+   if (Detected(utility, known))
+   {
+    if (fresh == 0 || (hasFront && vector.DistanceXZ(known, front) < vector.DistanceXZ(seen, front))) seen = known;
+    fresh++;
+   }
    job.m_Members.Insert(utility);
    if (hasMG) mg = utility;
   }

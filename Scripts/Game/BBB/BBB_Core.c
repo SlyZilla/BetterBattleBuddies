@@ -84,6 +84,7 @@ class BBB
   BBB_DoorUnstick.Read();
   BBB_ContactRelay.Read();
   BBB_Claims.Read();
+  BBB_Squad.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -119,6 +120,7 @@ class BBB
   BBB_ContactRelay.Stop();
   BBB_OrderLeash.Stop();
   BBB_Claims.Stop();
+  BBB_Squad.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -135,6 +137,8 @@ class BBB
   t = BBB_Perf.Lap("tick.orderLeash", t);
   BBB_Claims.Tick();
   t = BBB_Perf.Lap("tick.claims", t);
+  BBB_Squad.Tick();
+  t = BBB_Perf.Lap("tick.squad", t);
   BBB_CrewTurnout.Tick();
   t = BBB_Perf.Lap("tick.crewTurnout", t);
   BBB_DriverAlignment.Tick();

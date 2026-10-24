@@ -149,6 +149,8 @@ class BBB_Smoke
 	{
 		outThreatCenter = vector.Zero;
 		if (!group) return false;
+		// The squad's main front, not the average of every report (BBB_Squad).
+		if (BBB_Squad.On(group)) return BBB_Squad.Threat(group, RECENT_THREAT_MAX_S, outThreatCenter);
 
 		array<AIAgent> agents = {};
 		BBB.s_Hooks.GetMembers(group, agents);
