@@ -26,7 +26,7 @@ class BBB_CrewStaysTest : BBB_AimTest
  static ref BBB_CrewStaysTest s_CrewTest;
  static const ResourceName LAV = "{0FBF8F010F81A4E5}Prefabs/Vehicles/Wheeled/LAV25/LAV25.et";
  static const ResourceName WP_MOVE = "{750A8D1695BD6998}Prefabs/AI/Waypoints/AIWaypoint_Move.et";
- static const int EXPECTED = 13;
+ static const int EXPECTED = 14;
  protected int m_iChecks;
  protected int m_iFailures;
  protected ref BBB_CrewStaysLane m_A = new BBB_CrewStaysLane();
@@ -190,6 +190,12 @@ class BBB_CrewStaysTest : BBB_AimTest
   VanillaRequests(m_B);
   Check("on-gate-kept", BBB_CrewStays.s_iGatesKept == gates + 1, string.Format("%1 -> %2", gates, BBB_CrewStays.s_iGatesKept));
   Check("on-heal-kept", BBB_CrewStays.s_iHealsKept == heals + 1, string.Format("%1 -> %2", heals, BBB_CrewStays.s_iHealsKept));
+  // The same armed-crew heal, ordered by a player, keeps vanilla's get-out.
+  SCR_AIUtilityComponent ordered = UtilityOf(m_B.m_aCrew[1]);
+  SCR_AIMedicHealBehavior playerHeal = new SCR_AIMedicHealBehavior(ordered, null, m_B.m_OnFoot, false, priorityLevel: SCR_AIActionBase.PRIORITY_LEVEL_PLAYER);
+  int keptBefore = BBB_CrewStays.s_iHealsKept;
+  bool playerKept = BBB_CrewStays.Keep(ordered, playerHeal);
+  Check("on-player-heal-not-kept", !playerKept && BBB_CrewStays.s_iHealsKept == keptBefore, string.Format("kept=%1", playerKept));
   m_bShutBefore = shutBefore;
   GetGame().GetCallqueue().CallLater(Sample, 500, true);
  }

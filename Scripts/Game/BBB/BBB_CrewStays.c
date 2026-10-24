@@ -79,7 +79,7 @@ class BBB_CrewStays
  // Called where vanilla would add its get-out. True = he keeps his seat (no get-out added).
  static bool Keep(SCR_AIUtilityComponent utility, SCR_AIActionBase action)
  {
-  if (!On() || !utility || !action || action.EvaluatePriorityLevel() >= SCR_AIActionBase.PRIORITY_LEVEL_GAMEMASTER) return false;
+  if (!On() || !utility || !action || action.EvaluatePriorityLevel() >= SCR_AIActionBase.PRIORITY_LEVEL_PLAYER) return false;
   IEntity soldier = utility.m_OwnerEntity;
   IEntity vehicle = CrewedBy(soldier);
   if (!vehicle) return false;
