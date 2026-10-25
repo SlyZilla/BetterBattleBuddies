@@ -496,6 +496,22 @@ modded class SCR_AISectorThreatFilter
 {
 	SCR_AIUtilityComponent m_BBBUtility;
 
+	// Vanilla weighs a new event against a sector's estimated position by the ratio of their
+	// distances from the soldier, dividing by the distance to the estimated position: when that sits
+	// exactly where he stands (an earlier event there, e.g. a shot from his own vehicle) it threw
+	// "Division by zero" (AddNewEventsToSector:436, crash.log 25 Oct). That case moves the estimate
+	// 0.1 m off him first, which leaves it where it was.
+	override protected void AddNewEventsToSector(int sectorId, vector eventPos, float dangerDeltaPerEvent, int eventCount, float bumpDangerTo, SCR_EAIThreatSectorFlags flagsToAdd = 0)
+	{
+		if (sectorId >= 0 && sectorId < SECTOR_COUNT)
+		{
+			SCR_AIThreatSector sector = m_aSectors[sectorId];
+			if (sector && sector.m_iState != SCR_AIThreatSector.SECTOR_STATE_IDLE && vector.DistanceSq(GetMyPos(), sector.m_vEstimatedPos) < 0.0001)
+				sector.m_vEstimatedPos = sector.m_vEstimatedPos + Vector(0.1, 0, 0);
+		}
+		super.AddNewEventsToSector(sectorId, eventPos, dangerDeltaPerEvent, eventCount, bumpDangerTo, flagsToAdd);
+	}
+
 	override void OnShotsFired(vector eventPos, int count, bool isFlyby)
 	{
 		super.OnShotsFired(eventPos, count, isFlyby);

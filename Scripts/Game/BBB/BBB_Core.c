@@ -35,6 +35,9 @@ class BBB_Hooks : Managed
  bool AllowSmoke(SCR_AIGroup group) { return true; }
  // Host tactical doctrines may veto static weapon crewing.
  bool AllowStaticWeapons(SCR_AIGroup group) { return true; }
+ // Static guns this group holds where they stand (a checkpoint, a dug-in position): their
+ // gunners stay on them and an empty one is manned again (BBB_HeldGuns). Never vehicles.
+ void GetHeldGuns(SCR_AIGroup group, notnull array<IEntity> guns) { guns.Clear(); }
  // Host tactical doctrines may veto offensive hand grenade employment.
  bool AllowGrenades(SCR_AIGroup group) { return true; }
  // Host policy for autonomous night illumination.
@@ -77,6 +80,7 @@ class BBB
 		BBB_Morale.Read();
 		BBB_Smoke.Read();
 		BBB_StaticWeapons.Read();
+  BBB_HeldGuns.Read();
 		BBB_Grenades.Read();
   BBB_Flares.Read();
   BBB_Buildings.Read();
@@ -115,6 +119,7 @@ class BBB
   BBB_Morale.Stop();
   BBB_Smoke.Stop();
   BBB_StaticWeapons.Stop();
+  BBB_HeldGuns.Stop();
   BBB_Grenades.Stop();
   BBB_Flares.Stop();
   BBB_Buildings.Stop();
@@ -176,6 +181,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.smoke", t);
 		BBB_StaticWeapons.Tick();
 		t = BBB_Perf.Lap("tick.staticWeapons", t);
+  BBB_HeldGuns.Tick();
+  t = BBB_Perf.Lap("tick.heldGuns", t);
 		BBB_Grenades.Tick();
 		t = BBB_Perf.Lap("tick.grenades", t);
   BBB_Flares.Tick();

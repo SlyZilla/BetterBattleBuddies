@@ -74,6 +74,7 @@ Server owners can disable features individually:
 | `-bbbSmoke 0` | Tactical smoke for drags, bounds and withdrawals |
 | `-bbbGrenades 0` | Autonomous fragmentation-grenade use |
 | `-bbbStaticWeapons 0` | Autonomous static-weapon crewing |
+| `-bbbHoldGuns 0` | Gunners staying on static guns a host mod marks as held |
 | `-bbbMorale 0` | Morale-driven withdrawal and surrender |
 | `-bbbBuildings 0` | Contact-driven indoor cover movement |
 | `-bbbFlares 0` | BBB's autonomous night-illumination requests |

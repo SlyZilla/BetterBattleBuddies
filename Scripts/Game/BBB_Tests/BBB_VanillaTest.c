@@ -135,6 +135,7 @@ class BBB_VanillaTest
   bool acousticMathOK = Math.AbsFloat(delay0 - 160.0) < 0.5 && Math.AbsFloat(delay34 - 260.0) < 0.5 && delay68 > delay34;
 
   bool liveOK = false;
+  bool ownSpotOK = false;
   bool reflexOK = false;
   array<AIAgent> agents = {};
   if (group) group.GetAgents(agents);
@@ -186,6 +187,14 @@ class BBB_VanillaTest
     float airborneSup;
     utility.m_ThreatSystem.GetThreatValues(airborneSup, sh, inVal, en);
 
+    // Two shots heard at the soldier's own spot: the first puts the sector's estimated position on
+    // him, the second divided by zero in vanilla (crash.log 25 Oct). Reaching the line after them
+    // means no VM exception (the runner also fails on one).
+    utility.m_SectorThreatFilter.OnShotsFired(myPos, 1, false);
+    utility.m_SectorThreatFilter.OnShotsFired(myPos, 1, false);
+    ownSpotOK = true;
+    Print("[BBB] THREAT two shots at the soldier's own spot: no division by zero");
+
     // 343 m/s acoustic explosion reflex lifecycle test on live agent
     BBB_Threat.Stop();
     IEntity soldier = utility.m_OwnerEntity;
@@ -203,7 +212,7 @@ class BBB_VanillaTest
 
     utility.m_ThreatSystem.SetThreatValues(s0, sh0, in0, en0);
     utility.m_fBBBAmbushShockReady = 0;
-    liveOK = expTuned > expBase * 2.0 && expTuned > 0.33 && Math.AbsFloat(afterUpdate - expectedAfter) < 0.01 && flybySup > 0.35 && Math.AbsFloat(airborneSup - 0.10) < 0.001;
+    liveOK = expTuned > expBase * 2.0 && expTuned > 0.33 && Math.AbsFloat(afterUpdate - expectedAfter) < 0.01 && flybySup > 0.35 && Math.AbsFloat(airborneSup - 0.10) < 0.001 && ownSpotOK;
    }
   }
 

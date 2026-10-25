@@ -558,6 +558,8 @@ class BBB_StaticWeapons
 		if (!BBB_VehicleHelpers.TurretHasAmmo(job.m_Slot)) return "out of ammo";
 
 		if (HasThreatInArc(job.m_Group, job.m_StaticWeapon, s_fMaxArcDeg)) job.m_fLastThreatInArcMs = nowMs;
+		// A gun the group holds where it stands stays manned through quiet spells (BBB_HeldGuns).
+		else if (BBB_HeldGuns.Holds(job.m_Gunner, job.m_StaticWeapon)) job.m_fLastThreatInArcMs = nowMs;
 		else if (nowMs - job.m_fLastThreatInArcMs >= s_fQuietTimeoutS * 1000.0) return "quiet timeout / target cleared";
 		return "";
 	}
