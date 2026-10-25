@@ -7,7 +7,7 @@ class BBB_TacticTestHooks : BBB_Hooks
 // Squad tactic A/B (-bbbTacticTest). Two pairs of identical US fire teams, A on the committed
 // tactic, B left to the features' own rules (BBB_Tactic.s_aVanilla); enemies are passive and
 // can't move, nobody can be hurt.
-//  Pair 1, a fair fight (one enemy team 120 m north): A must go through the contact pause to
+//  Pair 1, a fair fight (one enemy team 100 m north): A must go through the contact pause to
 //  ASSAULT and fire and manoeuvre must run for it.
 //  Pair 2, outnumbered (four enemy teams 70 m north): A must HOLD, run no fire and manoeuvre,
 //  and in the 30 s after it holds advance at most 10 m, while B (old rules) presses on: runs fire
@@ -82,7 +82,7 @@ class BBB_TacticTest : BBB_AimTest
    for (int f = 0; f < count; f++)
    {
     // Pair 2's four teams stand closer and tighter (70 m, 12 m apart) so the squad sees enough of them.
-    float ahead = 120;
+    float ahead = 100; // inside 120 m: assault range (farther, a still enemy gets flanked: stage 4)
     float spacing = 25;
     if (p == 1) { ahead = 70; spacing = 12; }
     SCR_AIGroup foe = SCR_AIGroup.Cast(Spawn(TEAM_USSR, centre + Vector((f - (count - 1) * 0.5) * spacing, 0, ahead), "0 0 -1"));

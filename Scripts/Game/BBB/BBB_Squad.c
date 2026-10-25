@@ -269,6 +269,26 @@ class BBB_Squad
   return true;
  }
 
+ // The freshest real sighting (at most maxAge s old) on the main front: where covering fire goes.
+ static bool FreshReport(SCR_AIGroup group, float maxAge, out vector report)
+ {
+  report = vector.Zero;
+  vector main;
+  bool flanked;
+  BBB_SquadPicture picture = Get(group);
+  if (!picture || !MainThreat(group, RECENT_S, main, flanked)) return false;
+  vector offset = main - picture.m_vCentre;
+  float bearing = Math.Atan2(offset[0], offset[2]) * Math.RAD2DEG;
+  float best = maxAge + 1;
+  foreach (BBB_SquadContact contact : picture.m_Contacts)
+  {
+   if (contact.m_fAge > maxAge || contact.m_fAge >= best || AngleBetween(contact.m_fBearing, bearing) > SECTOR_HALF_DEG) continue;
+   best = contact.m_fAge;
+   report = contact.m_vPos;
+  }
+  return best <= maxAge;
+ }
+
  // No sighting at most maxAge s old within halfAngle degrees of this direction?
  static bool Clear(SCR_AIGroup group, vector direction, float halfAngle, float maxAge)
  {

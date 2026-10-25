@@ -88,6 +88,7 @@ class BBB
   BBB_Claims.Read();
   BBB_Squad.Read();
   BBB_Tactic.Read();
+  BBB_CoverFire.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();

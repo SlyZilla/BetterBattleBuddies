@@ -499,10 +499,10 @@ class BBB_FireManeuver
    SCR_AICombatComponent combat = utility.m_CombatComponent;
    if (combat.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) continue;
    float distance = vector.DistanceXZ(utility.m_OwnerEntity.GetOrigin(), job.m_Threat);
-   if (distance < 45 || distance > 300) continue;
-   vector aim = BBB.Ground(job.m_Threat);
-   float half = Math.Clamp(distance * 0.04, 4, 10);
-   SCR_AISuppressionVolumeBox volume = new SCR_AISuppressionVolumeBox(Vector(aim[0] - half, aim[1] - 1, aim[2] - half), Vector(aim[0] + half, aim[1] + 2.5, aim[2] + half));
+   // On the cover nearest the report that he can see, else the report (BBB_CoverFire); none near friendlies.
+   bool onCover;
+   SCR_AISuppressionVolumeBox volume = BBB_CoverFire.Volume(utility, job.m_Threat, onCover);
+   if (!volume) continue;
    BBB_AICoverFireBehavior burst = new BBB_AICoverFireBehavior(utility, null, volume, COVER_ORDER_S, 1.1);
    burst.m_BBBJob = job;
    utility.AddAction(burst);
