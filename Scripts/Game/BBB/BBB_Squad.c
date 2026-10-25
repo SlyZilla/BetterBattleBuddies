@@ -2,7 +2,7 @@
 // first time a feature asks in a given second and shared by every reader that second.
 // Main threat: every enemy the members perceive themselves (radio relay reports live in group
 // perception and never become an aim point here), counted once at its freshest sighting and
-// weighted by freshness and range. The heaviest 60-degree sector around the squad wins and its
+// weighted by freshness and range. Aim reads sightings up to 20 s old; the way out remembers 60 s. The heaviest 60-degree sector around the squad wins and its
 // weighted centre is the threat; enough weight beyond 90 degrees of it means the squad is flanked.
 // The old per-feature centroids averaged every report, so fire from two sides put the "threat"
 // between them (often on the squad itself) and each man's current target counted twice.
@@ -37,7 +37,8 @@ class BBB_SquadPicture : Managed
 class BBB_Squad
 {
  static const float REFRESH_S = 1.0;
- static const float RECENT_S = 20.0;
+ static const float RECENT_S = 20.0;  // aim: sightings this fresh
+ static const float MEMORY_S = 60.0;  // way out: a group unseen for a while is still there
  static const float SECTOR_HALF_DEG = 30.0;
  static const float FLANK_DEG = 90.0;
  static const float FLANK_SHARE = 0.25;
@@ -129,7 +130,7 @@ class BBB_Squad
    {
     if (!target || target.GetTargetCategory() != ETargetCategory.ENEMY) continue;
     float age = target.GetTimeSinceDetected();
-    if (age < 0 || age > RECENT_S) continue;
+    if (age < 0 || age > MEMORY_S) continue;
     IEntity enemy = target.GetTargetEntity();
     if (enemy && !BBB.IsAlive(enemy)) continue;
     BBB_SquadContact contact;
@@ -227,6 +228,12 @@ class BBB_Squad
   array<float> bearings = {};
   foreach (BBB_SquadContact contact : picture.m_Contacts)
    if (contact.m_fAge <= maxAge) bearings.Insert(contact.m_fBearing);
+  return EscapeFrom(bearings, direction);
+ }
+
+ static bool EscapeFrom(notnull array<float> bearings, out vector direction)
+ {
+  direction = vector.Zero;
   if (bearings.IsEmpty()) return false;
   bearings.Sort();
   float widest = bearings[0] + 360 - bearings[bearings.Count() - 1];
@@ -237,6 +244,17 @@ class BBB_Squad
    if (gap > widest) { widest = gap; middle = bearings[i - 1] + gap * 0.5; }
   }
   direction = Vector(Math.Sin(middle * Math.DEG2RAD), 0, Math.Cos(middle * Math.DEG2RAD));
+  return true;
+ }
+
+ // No sighting at most maxAge s old within halfAngle degrees of this direction?
+ static bool Clear(SCR_AIGroup group, vector direction, float halfAngle, float maxAge)
+ {
+  BBB_SquadPicture picture = Get(group);
+  if (!picture) return true;
+  float bearing = Math.Atan2(direction[0], direction[2]) * Math.RAD2DEG;
+  foreach (BBB_SquadContact contact : picture.m_Contacts)
+   if (contact.m_fAge <= maxAge && AngleBetween(contact.m_fBearing, bearing) <= halfAngle) return false;
   return true;
  }
 

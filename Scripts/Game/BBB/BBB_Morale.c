@@ -30,6 +30,7 @@ class BBB_GroupMoraleState : Managed
 	bool m_bWithdrawing;
 	vector m_vThreatCenter;
 	vector m_vAwayFrom;             // point the bounds back away from: the threat, or BBB_Squad's way out
+	vector m_vEscapeDir;            // BBB_Squad way out, kept for the whole withdrawal while it stays clear
 	vector m_vRetrogradeDir;
 	vector m_vWithdrawPos;
 	ref array<SCR_AIUtilityComponent> m_TeamCover = {};
@@ -42,6 +43,25 @@ class BBB_GroupMoraleState : Managed
 	int m_iStalledBounds;           // consecutive bounds that gained almost no ground
 	float m_fNextWithdrawAllowed;   // no new withdrawal before this time (s)
 	string m_sEndReason;
+	ref array<ref BBB_AIWithdrawMove> m_aMoves = {}; // the moving half's run to m_vWithdrawPos
+	IEntity m_Leader;               // last leader seen up
+	float m_fLeaderLostAt;          // when he went down (s); counts as leader loss while the squad reorganises
+}
+
+// The moving half's run back. Above attacking (90) like Buildings' indoor move and Rearm's
+// out-of-spares run, so it happens under fire (vanilla combat-move requests only run inside a
+// combat behaviour and stalled here); grenades, healing, danger and player orders still outrank it.
+class BBB_AIWithdrawMove : SCR_AIMoveIndividuallyBehavior
+{
+	override float CustomEvaluate()
+	{
+		return BBB_Morale.MOVE_PRIORITY;
+	}
+
+	override int GetCause()
+	{
+		return SCR_EAIBehaviorCause.COMBAT;
+	}
 }
 
 class BBB_SurrenderState : Managed
@@ -76,6 +96,8 @@ class BBB_Morale
 	static const float MIN_BOUND_GAIN_M = 3.0;      // less than this counts as a stalled bound
 	static const int MAX_STALLED_BOUNDS = 2;
 	static const float WITHDRAW_COOLDOWN_S = 60.0;  // after a withdrawal ends, before another may start
+	static const float MOVE_PRIORITY = 91;
+	static const float LEADER_REORG_S = 45.0;      // a fallen leader still counts this long after a new one is named
 
 	// State tracking
 	protected static ref array<ref BBB_GroupMoraleState> s_States = {};
@@ -274,6 +296,30 @@ class BBB_Morale
 
 	// ---------------------------------------------------------------- morale evaluation
 
+	protected static bool Down(IEntity soldier)
+	{
+		if (!soldier || !BBB.IsAlive(soldier)) return true;
+		ChimeraCharacter character = ChimeraCharacter.Cast(soldier);
+		return character && character.GetCharacterController() && character.GetCharacterController().IsUnconscious();
+	}
+
+	static bool Running(BBB_AIWithdrawMove move)
+	{
+		return move && move.GetActionState() != EAIActionState.COMPLETED && move.GetActionState() != EAIActionState.FAILED;
+	}
+
+	// Call off the moving half's runs (bound over, withdrawal ended, squad gone, Stop).
+	protected static void CancelMoves(BBB_GroupMoraleState state)
+	{
+		SetCovering(state, false);
+		foreach (int i, BBB_AIWithdrawMove move : state.m_aMoves)
+		{
+			if (i < state.m_TeamMove.Count() && state.m_TeamMove[i] && state.m_TeamMove[i].m_BBBWithdrawRun == move) state.m_TeamMove[i].m_BBBWithdrawRun = null;
+			if (Running(move)) move.Fail();
+		}
+		state.m_aMoves.Clear();
+	}
+
 	static float CalculateGroupMorale(BBB_GroupMoraleState state, array<AIAgent> agents, out int aliveCount, out int outOfAmmoCount)
 	{
 		aliveCount = 0;
@@ -309,6 +355,13 @@ class BBB_Morale
 
 		if (state.m_iInitialCount < aliveCount) state.m_iInitialCount = aliveCount;
 		if (state.m_iInitialCount <= 0) return 0;
+
+		// The group names a new leader the moment he falls, so "no leader alive" almost never
+		// happened. The squad still counts him lost while it reorganises.
+		float now = GetGame().GetWorld().GetWorldTime() / 1000.0;
+		if (state.m_Leader && state.m_Leader != leaderEntity && Down(state.m_Leader)) state.m_fLeaderLostAt = now;
+		if (leaderAlive) state.m_Leader = leaderEntity;
+		if (state.m_fLeaderLostAt > 0 && now - state.m_fLeaderLostAt < LEADER_REORG_S) leaderAlive = false;
 
 		float score = 0;
 
@@ -403,11 +456,27 @@ class BBB_Morale
 	// Ground actually gained away from the threat since the bound began (never negative)
 	// With the squad picture: back away from the widest gap's far side, not one group (moving
 	// straight away from one front can walk into the other).
-	protected static vector AwayFrom(SCR_AIGroup group, vector squadCenter, vector threatCenter)
+	// The way out is kept for the whole withdrawal (re-picked only once an enemy is seen within
+	// 45 deg of it), so the bounds don't swing as sightings come and go.
+	protected static vector AwayFrom(BBB_GroupMoraleState state, vector squadCenter, vector threatCenter)
 	{
+		if (!BBB_Squad.On(state.m_Group)) return threatCenter;
 		vector escape;
-		if (BBB_Squad.On(group) && BBB_Squad.Escape(group, 15.0, escape)) return squadCenter - escape * 100.0;
-		return threatCenter;
+		if (state.m_vEscapeDir.LengthSq() < 0.01 || !BBB_Squad.Clear(state.m_Group, state.m_vEscapeDir, 45.0, 15.0))
+		{
+			if (!BBB_Squad.Escape(state.m_Group, BBB_Squad.MEMORY_S, escape)) return threatCenter;
+			state.m_vEscapeDir = escape;
+		}
+		return squadCenter - state.m_vEscapeDir * 100.0;
+	}
+
+	// A withdrawal's covering half holds where it is (vanilla attack would advance on the enemy).
+	protected static void SetCovering(BBB_GroupMoraleState state, bool hold)
+	{
+		foreach (SCR_AIUtilityComponent coverer : state.m_TeamCover)
+		{
+			if (coverer) coverer.m_bBBBHoldGround = hold;
+		}
 	}
 
 	static float GainAway(vector boundStart, vector now, vector threatCenter)
@@ -425,6 +494,7 @@ class BBB_Morale
 
 	protected static void EndWithdrawal(BBB_GroupMoraleState state, float now, bool contactBroken, string reason, float threatDist)
 	{
+		CancelMoves(state);
 		state.m_bWithdrawing = false;
 		state.m_bContactBroken = contactBroken;
 		state.m_sEndReason = reason;
@@ -441,7 +511,8 @@ class BBB_Morale
 		if (!SquadCenter(state.m_Group, squadCenter)) return;
 
 		state.m_vThreatCenter = threatCenter;
-		state.m_vAwayFrom = AwayFrom(state.m_Group, squadCenter, threatCenter);
+		state.m_vEscapeDir = vector.Zero;
+		state.m_vAwayFrom = AwayFrom(state, squadCenter, threatCenter);
 		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
 		state.m_bWithdrawing = true;
 		state.m_fBrokenSince = now;
@@ -463,6 +534,7 @@ class BBB_Morale
 
 	protected static void ExecuteBoundingPhase(BBB_GroupMoraleState state)
 	{
+		CancelMoves(state);
 		state.m_TeamCover.Clear();
 		state.m_TeamMove.Clear();
 
@@ -487,15 +559,21 @@ class BBB_Morale
 		if (consciousMembers.IsEmpty())
 		{
 			state.m_bWithdrawing = false;
+			CancelMoves(state);
 			state.m_sEndReason = "no one able to move";
 			return;
 		}
 		vector boundStart;
 		if (SquadCenter(state.m_Group, boundStart)) state.m_vBoundStart = boundStart;
 
-		// Split into two logical elements for bounding overwatch
+		// Split into two logical elements for bounding overwatch; a lone survivor just runs
 		int half = consciousMembers.Count() / 2;
 		if (half == 0) half = 1;
+		if (consciousMembers.Count() == 1)
+		{
+			state.m_TeamMove.Insert(consciousMembers[0]);
+			consciousMembers.Clear();
+		}
 
 		for (int i = 0; i < consciousMembers.Count(); i++)
 		{
@@ -512,28 +590,17 @@ class BBB_Morale
 			}
 		}
 
-		// Team Move bounds back to destination
+		// Team Move runs back to the destination (native pathing; covered by the other half)
 		foreach (SCR_AIUtilityComponent mover : state.m_TeamMove)
 		{
-			SCR_AICombatMoveRequest_Move req = new SCR_AICombatMoveRequest_Move();
-			req.m_vMovePos = state.m_vWithdrawPos;
-			req.m_vTargetPos = state.m_vThreatCenter + Vector(0, 1.4, 0);
-			req.m_eDirection = SCR_EAICombatMoveDirection.CUSTOM_POS;
-			req.m_fCoverSearchDistMin = 4.0;
-			req.m_fCoverSearchDistMax = 20.0;
-			req.m_bTryFindCover = true;
-			req.m_bFailIfNoCover = false;
-			req.m_eMovementType = EMovementType.RUN;
-			req.m_eStanceMoving = ECharacterStance.CROUCH;
-			req.m_eStanceEnd = ECharacterStance.CROUCH;
-			req.m_bAimAtTarget = true;
-			req.m_bAimAtTargetEnd = true;
-			req.m_fMoveDuration_s = BOUND_TIMEOUT_S;
-
-			mover.m_CombatMoveState.ApplyNewRequest(req);
+			BBB_AIWithdrawMove move = new BBB_AIWithdrawMove(mover, null, state.m_vWithdrawPos, priority: MOVE_PRIORITY, radius: 3.0);
+			mover.AddAction(move);
+			mover.m_BBBWithdrawRun = move;
+			state.m_aMoves.Insert(move);
 		}
 
 		// Team Cover establishes overwatch and faces threat
+		SetCovering(state, true);
 		foreach (SCR_AIUtilityComponent coverer : state.m_TeamCover)
 		{
 			SCR_AICombatMoveRequest_Stop stopReq = new SCR_AICombatMoveRequest_Stop();
@@ -546,6 +613,7 @@ class BBB_Morale
 		BBB_Smoke.DeployForRetrograde(state.m_Group, state.m_vThreatCenter, state.m_TeamCover);
 
 		s_iWithdrawalBounds++;
+		PrintFormat("[BBB] MORALE: Squad %1 bound %2: %3 run to %4, %5 cover", BBB.s_Hooks.NameOf(state.m_Group), state.m_iPhase, state.m_TeamMove.Count(), state.m_vWithdrawPos, state.m_TeamCover.Count());
 	}
 
 	protected static void UpdateWithdrawal(BBB_GroupMoraleState state, float now)
@@ -554,11 +622,11 @@ class BBB_Morale
 
 		// Check if moving team arrived or phase timed out
 		bool allArrived = true;
-		foreach (SCR_AIUtilityComponent mover : state.m_TeamMove)
+		foreach (int index, SCR_AIUtilityComponent mover : state.m_TeamMove)
 		{
-			if (!mover || !mover.m_OwnerEntity || !BBB.IsAlive(mover.m_OwnerEntity) || !mover.m_CombatMoveState) continue;
-			float distToDest = vector.DistanceXZ(mover.m_OwnerEntity.GetOrigin(), state.m_vWithdrawPos);
-			if (distToDest > 6.0 && mover.m_CombatMoveState.IsMoving())
+			if (!mover || !mover.m_OwnerEntity || !BBB.IsAlive(mover.m_OwnerEntity) || index >= state.m_aMoves.Count()) continue;
+			BBB_AIWithdrawMove move = state.m_aMoves[index];
+			if (Running(move) && vector.DistanceXZ(mover.m_OwnerEntity.GetOrigin(), state.m_vWithdrawPos) > 6.0)
 			{
 				allArrived = false;
 				break;
@@ -575,6 +643,7 @@ class BBB_Morale
 			return;
 		}
 		float gain = GainAway(state.m_vBoundStart, squadCenter, state.m_vAwayFrom);
+		PrintFormat("[BBB] MORALE: Squad %1 bound %2 over after %3 s: gained %4 m", BBB.s_Hooks.NameOf(state.m_Group), state.m_iPhase, Math.Round(phaseElapsed), Math.Round(gain));
 		state.m_fTotalWithdrawn = state.m_fTotalWithdrawn + gain;
 		if (gain < MIN_BOUND_GAIN_M) state.m_iStalledBounds++;
 		else state.m_iStalledBounds = 0;
@@ -611,7 +680,7 @@ class BBB_Morale
 		// Continue withdrawal: swap roles and bound again
 		state.m_iCoverTeam = 1 - state.m_iCoverTeam;
 		state.m_vThreatCenter = threatCenter;
-		state.m_vAwayFrom = AwayFrom(state.m_Group, squadCenter, threatCenter);
+		state.m_vAwayFrom = AwayFrom(state, squadCenter, threatCenter);
 		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
 
 		ExecuteBoundingPhase(state);
@@ -720,6 +789,7 @@ class BBB_Morale
 			BBB_GroupMoraleState gs = s_States[i];
 			if (!gs || !gs.m_Group || !groups.Contains(gs.m_Group))
 			{
+				if (gs) CancelMoves(gs);
 				s_States.RemoveOrdered(i);
 			}
 		}
@@ -804,6 +874,30 @@ class BBB_Morale
 		}
 
 		s_Surrendered.Clear();
+		foreach (BBB_GroupMoraleState gone : s_States)
+		{
+			if (gone) CancelMoves(gone);
+		}
 		s_States.Clear();
+	}
+}
+
+modded class SCR_AIUtilityComponent
+{
+	bool m_bBBBHoldGround; // in a withdrawal's covering half: fight from here, don't advance
+	BBB_AIWithdrawMove m_BBBWithdrawRun; // his live run back (BBB_GroupMoraleState holds it)
+}
+
+// A man firing at a high-scoring target attacks above any normal-level move (1120), so the
+// covering half never started its run. During his run back attack stays below it, as it
+// yields to a drag, unless he must fight off a visible enemy on top of him (BBB_Drag.Defend) or
+// a player or GM order holds him.
+modded class SCR_AIAttackBehavior
+{
+	override float CustomEvaluate()
+	{
+		float priority = super.CustomEvaluate();
+		if (priority < BBB_Morale.MOVE_PRIORITY || !m_Utility || !BBB_Morale.Running(m_Utility.m_BBBWithdrawRun) || BBB_Drag.Defend(m_Utility) || BBB_OrderIntent.Held(m_Utility)) return priority;
+		return PRIORITY_BEHAVIOR_ATTACK_SELECTED;
 	}
 }

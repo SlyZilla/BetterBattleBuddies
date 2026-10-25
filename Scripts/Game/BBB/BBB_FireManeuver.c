@@ -917,6 +917,8 @@ modded class SCR_AICombatMoveLogic_Attack
 {
  protected override bool MoveToNextPosCondition()
  {
+  // Covering a squad's withdrawal: fight from here (danger moves are decided before this).
+  if (m_Utility.m_bBBBHoldGround) return false;
   int decision = BBB_FireManeuver.Decision(m_Utility);
   if (decision < 0) return false;
   if (decision > 0) return true;
@@ -934,6 +936,8 @@ modded class SCR_AICombatMoveLogic_Suppressive
 {
  protected override bool MoveToNextPosCondition()
  {
+  // Covering a squad's withdrawal: fight from here (danger moves are decided before this).
+  if (m_Utility.m_bBBBHoldGround) return false;
   int decision = BBB_FireManeuver.Decision(m_Utility);
   if (decision < 0) return false;
   if (decision > 0) return true;
