@@ -219,7 +219,7 @@ class BBB_FireManeuver
     s_Jobs.RemoveElement(j);
     continue;
    }
-   if (!groups.Contains(existing) || !s_bOn || !GroupAllowed(existing)) End(existing, now);
+   if (!groups.Contains(existing) || !s_bOn || !GroupAllowed(existing) || !BBB_Tactic.AllowsAssault(existing)) End(existing, now);
   }
   for (int c = s_Next.Count() - 1; c >= 0; c--)
    if (!s_Next.GetKey(c) || !groups.Contains(s_Next.GetKey(c))) s_Next.RemoveElement(c);
@@ -237,7 +237,7 @@ class BBB_FireManeuver
     // Admission scans do not need to repeat every second for squads that
     // cannot form a job. Active jobs still validate orders/update every tick.
     s_Next.Set(group, now + START_RETRY_S);
-    if (!GroupAllowed(group)) continue;
+    if (!GroupAllowed(group) || !BBB_Tactic.AllowsAssault(group)) continue;
     job = Start(group, now);
    }
    if (job) Update(job, now);
@@ -917,8 +917,8 @@ modded class SCR_AICombatMoveLogic_Attack
 {
  protected override bool MoveToNextPosCondition()
  {
-  // Covering a squad's withdrawal: fight from here (danger moves are decided before this).
-  if (m_Utility.m_bBBBHoldGround) return false;
+  // Covering a squad's withdrawal, or the squad tactic holds: fight from here (danger moves are decided before this).
+  if (m_Utility.m_bBBBHoldGround || m_Utility.m_bBBBTacticHold) return false;
   int decision = BBB_FireManeuver.Decision(m_Utility);
   if (decision < 0) return false;
   if (decision > 0) return true;
@@ -936,8 +936,8 @@ modded class SCR_AICombatMoveLogic_Suppressive
 {
  protected override bool MoveToNextPosCondition()
  {
-  // Covering a squad's withdrawal: fight from here (danger moves are decided before this).
-  if (m_Utility.m_bBBBHoldGround) return false;
+  // Covering a squad's withdrawal, or the squad tactic holds: fight from here (danger moves are decided before this).
+  if (m_Utility.m_bBBBHoldGround || m_Utility.m_bBBBTacticHold) return false;
   int decision = BBB_FireManeuver.Decision(m_Utility);
   if (decision < 0) return false;
   if (decision > 0) return true;

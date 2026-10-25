@@ -45,6 +45,8 @@ class BBB_Hooks : Managed
  bool AllowDoorUnstick(SCR_AIGroup group) { return true; }
  // Radio contact reports may reach this group (vanilla may then send fireteams to look).
  bool AllowContactRelay(SCR_AIGroup group) { return true; }
+ // A committed squad tactic (BBB_Tactic) may run this group: HOLD keeps it from advancing.
+ bool AllowSquadTactic(SCR_AIGroup group) { return true; }
  // Host mod manages its own vehicle stall/unstick and tactical cargo dismount for this group.
  bool ManagesVehicleDriving(SCR_AIGroup group) { return false; }
  // Binding host orders always outrank tactical deviations. Existing driving hosts
@@ -85,6 +87,7 @@ class BBB
   BBB_ContactRelay.Read();
   BBB_Claims.Read();
   BBB_Squad.Read();
+  BBB_Tactic.Read();
 		s_VehicleHelpers = new BBB_VehicleHelpers();
 		s_Launchers = new BBB_Launchers();
 		s_Combat = new BBB_Combat();
@@ -121,6 +124,7 @@ class BBB
   BBB_OrderLeash.Stop();
   BBB_Claims.Stop();
   BBB_Squad.Stop();
+  BBB_Tactic.Stop();
   BBB_Transport.ClearHits();
   s_bStarted = false;
 		s_VehicleHelpers = null;
@@ -139,6 +143,8 @@ class BBB
   t = BBB_Perf.Lap("tick.claims", t);
   BBB_Squad.Tick();
   t = BBB_Perf.Lap("tick.squad", t);
+  BBB_Tactic.Tick();
+  t = BBB_Perf.Lap("tick.tactic", t);
   BBB_CrewTurnout.Tick();
   t = BBB_Perf.Lap("tick.crewTurnout", t);
   BBB_DriverAlignment.Tick();

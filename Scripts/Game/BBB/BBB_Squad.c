@@ -2,7 +2,9 @@
 // first time a feature asks in a given second and shared by every reader that second.
 // Main threat: every enemy the members perceive themselves (radio relay reports live in group
 // perception and never become an aim point here), counted once at its freshest sighting and
-// weighted by freshness and range. Aim reads sightings up to 20 s old; the way out remembers 60 s. The heaviest 60-degree sector around the squad wins and its
+// weighted by freshness and range. Aim reads sightings up to 20 s old; the way out remembers 60 s.
+// Sightings no member still holds are kept (aging) for 60 s while the enemy lives: the squad
+// doesn't forget a group because the men who saw it fell or looked away. The heaviest 60-degree sector around the squad wins and its
 // weighted centre is the threat; enough weight beyond 90 degrees of it means the squad is flanked.
 // The old per-feature centroids averaged every report, so fire from two sides put the "threat"
 // between them (often on the squad itself) and each man's current target counted twice.
@@ -91,6 +93,10 @@ class BBB_Squad
  protected static void Build(BBB_SquadPicture picture, float now)
  {
   s_iBuilt++;
+  float since = now - picture.m_fBuilt;
+  // The squad remembers what its men saw (a man who falls or looks away doesn't take it with him).
+  array<ref BBB_SquadContact> before = {};
+  foreach (BBB_SquadContact old : picture.m_Contacts) before.Insert(old);
   picture.m_fBuilt = now;
   picture.m_iConscious = 0;
   picture.m_bLeaderUp = false;
@@ -147,6 +153,14 @@ class BBB_Squad
     contact.m_vPos = target.GetLastDetectedPosition();
    }
   }
+  foreach (BBB_SquadContact kept : before)
+  {
+   if (!kept.m_Enemy || byEnemy.Contains(kept.m_Enemy) || !BBB.IsAlive(kept.m_Enemy)) continue;
+   kept.m_fAge = kept.m_fAge + since;
+   if (kept.m_fAge > MEMORY_S) continue;
+   picture.m_Contacts.Insert(kept);
+   byEnemy.Set(kept.m_Enemy, kept);
+  }
   if (picture.m_iConscious > 0)
   {
    picture.m_bHasCentre = true;
@@ -185,8 +199,16 @@ class BBB_Squad
 
  static bool MainThreat(SCR_AIGroup group, float maxAge, out vector position, out bool flanked)
  {
+  int enemies;
+  return MainSector(group, maxAge, position, flanked, enemies);
+ }
+
+ // MainThreat plus how many enemies the squad has seen in that sector.
+ static bool MainSector(SCR_AIGroup group, float maxAge, out vector position, out bool flanked, out int enemies)
+ {
   position = vector.Zero;
   flanked = false;
+  enemies = 0;
   BBB_SquadPicture picture = Get(group);
   if (!picture || !picture.m_bHasCentre) return false;
   BBB_SquadContact seed;
@@ -209,7 +231,7 @@ class BBB_Squad
   {
    if (member.m_fAge > maxAge) continue;
    float off = AngleBetween(seed.m_fBearing, member.m_fBearing);
-   if (off <= SECTOR_HALF_DEG) { sum = sum + member.m_vPos * member.m_fWeight; weight += member.m_fWeight; }
+   if (off <= SECTOR_HALF_DEG) { sum = sum + member.m_vPos * member.m_fWeight; weight += member.m_fWeight; enemies++; }
    else if (off > FLANK_DEG) behind += member.m_fWeight;
   }
   position = sum * (1.0 / weight);

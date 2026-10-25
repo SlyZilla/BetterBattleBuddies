@@ -314,6 +314,8 @@ class BBB_Think
    lines.Insert("his squad (" + Who(group) + "):");
    string picture = BBB_Squad.Describe(SCR_AIGroup.Cast(group));
    if (picture != "") lines.Insert(picture);
+   string tactic = BBB_Tactic.Describe(SCR_AIGroup.Cast(group));
+   if (tactic != "") lines.Insert(tactic);
    AddLines(LogOf(group), now, lines, maxNotes);
   }
  }

@@ -34,6 +34,7 @@ class BBB_SquadTest : BBB_AimTest
  int m_Failures;
  int m_Wait;
  vector m_vOld; // team A's old centroid when both groups were seen
+ int m_iBothAt = -1; // tick A first saw both
 
  static void Start()
  {
@@ -196,9 +197,12 @@ class BBB_SquadTest : BBB_AimTest
  {
   m_Wait++;
   if (m_Wait % 5 == 0) PrintFormat("[BBB] SQUADTEST t=%1 A sees north %2 south %3, B sees north %4 south %5", m_Wait, Sees(0, m_Enemies[0]), Sees(0, m_Enemies[1]), Sees(1, m_Enemies[0]), Sees(1, m_Enemies[1]));
-  if (!(SeesBoth(0) && (SeesBoth(1) || m_Wait >= 30)) && m_Wait < 90) return;
+  // 3 s after A first sees both (the picture refreshes each second; B is only a reference and
+  // waiting for it let A's sightings age out).
+  if (SeesBoth(0) && m_iBothAt < 0) m_iBothAt = m_Wait;
+  if ((m_iBothAt < 0 || m_Wait < m_iBothAt + 3) && m_Wait < 90) return;
   GetGame().GetCallqueue().Remove(WaitContact);
-  SquadCheck("A-sees-both", SeesBoth(0), string.Format("after %1 s", m_Wait));
+  SquadCheck("A-sees-both", m_iBothAt >= 0, string.Format("first at %1 s, still %2", m_iBothAt, SeesBoth(0)));
   PrintFormat("[BBB] SQUADTEST B (old way, live reference) sees both %1", SeesBoth(1));
   ComparePictures();
   Break();
@@ -211,7 +215,8 @@ class BBB_SquadTest : BBB_AimTest
   Centre(m_Teams[0], team);
   vector picture;
   bool flanked;
-  bool has = BBB_Squad.MainThreat(m_Teams[0], 15.0, picture, flanked);
+  // The sector at the aim window (20 s), as the tactic layer reads it.
+  bool has = BBB_Squad.MainThreat(m_Teams[0], BBB_Squad.RECENT_S, picture, flanked);
   BBB_Squad.s_aVanilla.Insert(m_Teams[0]);
   vector old;
   bool hasOld = BBB_Morale.GetThreatCentroid(m_Teams[0], old);
