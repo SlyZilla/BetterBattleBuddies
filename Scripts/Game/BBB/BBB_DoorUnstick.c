@@ -5,6 +5,9 @@
 // house door next to him (within 1.6 m) swung fully open, or over to its other side
 // if it already is. Positions only: the door search runs for stalled soldiers alone.
 // Never closes a door. -bbbDoorUnstick 0 turns it off.
+// A man the swings don't free isn't jammed by the leaf: after ROUNDS_BEFORE_STEP rounds he is set
+// a few metres further along his own path, further each time; after MAX_STEPS he and the door are
+// left alone for GIVE_UP_MS (an AC: Actual playtest: one door swung 237 times in 55 minutes for one man).
 
 class BBB_DoorStall : Managed
 {
@@ -13,6 +16,9 @@ class BBB_DoorStall : Managed
  float m_Next;      // no new swing for him before this
  BaseDoorComponent m_Door;    // the door last swung for him (until he moves again)
  int m_Tries;
+ int m_Rounds;      // rounds of MAX_TRIES swings that freed nobody
+ int m_Steps;       // times set further along his path
+ vector m_StepAt;   // where the last one put him
  int m_Seen;        // tick stamp
 }
 
@@ -25,12 +31,19 @@ class BBB_DoorUnstick
  static const float RETRY_MS = 3000;
  static const int MAX_TRIES = 3;
  static const float BACKOFF_MS = 30000;
+ static const int ROUNDS_BEFORE_STEP = 2;
+ static const float STEP_M = 3;           // along his path, times the step's number
+ static const int MAX_STEPS = 3;
+ static const float STEP_CLEAR_M = 15;    // this far from the last step: that one worked
+ static const float GIVE_UP_MS = 300000;
 
  static int s_iRead;
  static bool s_bOn;
  static int s_iStalls;  // stalled soldiers found next to a house door
  static int s_iSwings;  // doors swung
  static int s_iFreed;   // soldiers who moved again after a swing
+ static int s_iSteps;   // soldiers set further along their path
+ static int s_iGaveUp;  // soldiers left alone with their door
  protected static int s_iTick;
  protected static ref map<IEntity, ref BBB_DoorStall> s_Stalls;
  protected static ref array<SCR_AIGroup> s_Groups;
@@ -140,6 +153,8 @@ class BBB_DoorUnstick
    stall.m_Since = now;
    stall.m_Door = null;
    stall.m_Tries = 0;
+   stall.m_Rounds = 0;
+   if (stall.m_Steps > 0 && vector.DistanceXZ(pos, stall.m_StepAt) >= STEP_CLEAR_M) stall.m_Steps = 0;
    return;
   }
   if (now - stall.m_Since < STALL_MS || now < stall.m_Next) return;
@@ -148,9 +163,7 @@ class BBB_DoorUnstick
   if (!door) { stall.m_Next = now + RETRY_MS; return; }
   if (stall.m_Tries >= MAX_TRIES)
   {
-   // Not the door's fault (or not one we can fix): leave him to the engine for a while.
-   stall.m_Tries = 0;
-   stall.m_Next = now + BACKOFF_MS;
+   RoundFailed(agent, body, stall, pos, now);
    return;
   }
   if (stall.m_Tries == 0) s_iStalls++;
@@ -160,6 +173,66 @@ class BBB_DoorUnstick
   stall.m_Next = now + RETRY_MS;
   s_iSwings++;
   PrintFormat("[BBB] DOORUNSTICK swing %1 for %2 try=%3 state=%4", stall.m_Door, body, stall.m_Tries, door.GetControlValue());
+ }
+
+ // MAX_TRIES swings freed nobody: not the door's fault (or not one we can fix). Leave him to the
+ // engine for a while; after ROUNDS_BEFORE_STEP rounds set him along his path (WantsToMove has just
+ // read it); after MAX_STEPS leave him and the door alone.
+ static void RoundFailed(AIAgent agent, ChimeraCharacter body, BBB_DoorStall stall, vector pos, float now)
+ {
+  stall.m_Tries = 0;
+  stall.m_Rounds++;
+  stall.m_Next = now + BACKOFF_MS;
+  if (stall.m_Rounds < ROUNDS_BEFORE_STEP) return;
+  stall.m_Rounds = 0;
+  if (stall.m_Steps >= MAX_STEPS)
+  {
+   stall.m_Steps = 0;
+   stall.m_Door = null;
+   stall.m_Next = now + GIVE_UP_MS;
+   s_iGaveUp++;
+   PrintFormat("[BBB] DOORUNSTICK gave up on %1 at %2: not a door he can get past", body, pos);
+   return;
+  }
+  vector onward;
+  if (!StepTarget(agent, pos, STEP_M * (stall.m_Steps + 1), onward)) return;
+  stall.m_Steps++;
+  stall.m_StepAt = onward;
+  stall.m_Pos = onward;
+  stall.m_Since = now;
+  stall.m_Door = null;
+  vector transform[4];
+  body.GetWorldTransform(transform);
+  transform[3] = onward;
+  body.Teleport(transform);
+  s_iSteps++;
+  PrintFormat("[BBB] DOORUNSTICK %1 set %2 m along his path, step %3", body, vector.Distance(pos, onward), stall.m_Steps);
+ }
+
+ // The point 'distance' m along the path he was just given (WantsToMove read it), on the navmesh.
+ static bool StepTarget(AIAgent agent, vector pos, float distance, out vector onward)
+ {
+  float left = distance;
+  vector from = pos;
+  vector target = pos;
+  foreach (vector point : s_Path)
+  {
+   float leg = vector.DistanceXZ(from, point);
+   if (leg <= 0.01) continue;
+   if (leg >= left)
+   {
+    target = from + (point - from) * (left / leg);
+    left = 0;
+    break;
+   }
+   left -= leg;
+   from = point;
+   target = point;
+  }
+  if (vector.DistanceXZ(pos, target) < 1) return false;
+  AIPathfindingComponent pathing = AIPathfindingComponent.Cast(agent.FindComponent(AIPathfindingComponent));
+  if (!pathing) return false;
+  return pathing.GetClosestPositionOnNavmesh(target, Vector(2, 3, 2), onward);
  }
 
  // Fully open the way it was already going; if it is fully open, over to the other side.
