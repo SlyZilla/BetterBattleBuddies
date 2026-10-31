@@ -555,7 +555,7 @@ class BBB_Tactic
    else Hold(state, now, "can't keep assaulting", advancing);
    return;
   }
-  if ((state.m_iTactic == ASSAULT || state.m_iTactic == FLANK) && now < state.m_fUntil && enemies >= picture.m_iConscious * OVERRUN) { Hold(state, now, string.Format("more enemies than thought (%1 seen, %2 of us)", enemies, picture.m_iConscious), advancing); return; }
+  if ((state.m_iTactic == ASSAULT || state.m_iTactic == FLANK) && now < state.m_fUntil && picture.m_iConscious * OVERRUN <= enemies) { Hold(state, now, string.Format("more enemies than thought (%1 seen, %2 of us)", enemies, picture.m_iConscious), advancing); return; }
   // A squad with ground to take holds only so long; then its order carries it on for a while
   // (the host hears it needs support through Report).
   if (advancing && state.m_iTactic == HOLD && now - state.m_fSince >= PUSH_HOLD_S)

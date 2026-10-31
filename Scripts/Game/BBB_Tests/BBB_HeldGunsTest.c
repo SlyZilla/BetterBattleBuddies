@@ -167,7 +167,7 @@ class BBB_HeldGunsTest : BBB_AimTest
    // The sector stays quiet: BBB lets B's gunner go after the quiet timeout, A's stays.
    if (!SeatedIn(m_ManA, m_GunA)) m_bALeft = true;
    bool bEmpty = Occupant(m_GunB) == null;
-   if (m_iWait < BBB_StaticWeapons.s_fQuietTimeoutS + 3 || (!bEmpty && m_iWait < BBB_StaticWeapons.s_fQuietTimeoutS + 15)) return;
+   if (BBB_StaticWeapons.s_fQuietTimeoutS + 3 > m_iWait || (!bEmpty && BBB_StaticWeapons.s_fQuietTimeoutS + 15 > m_iWait)) return;
    Check("quiet-held-stays", !m_bALeft && SeatedIn(m_ManA, m_GunA), string.Format("A's gunner left %1 in %2 s", m_bALeft, m_iWait));
    Check("quiet-unheld-released", bEmpty && BBB_StaticWeapons.s_iWeaponsReleased > m_iReleasedBefore, string.Format("B empty %1, released %2 -> %3", bEmpty, m_iReleasedBefore, BBB_StaticWeapons.s_iWeaponsReleased));
    DismountChecks();
