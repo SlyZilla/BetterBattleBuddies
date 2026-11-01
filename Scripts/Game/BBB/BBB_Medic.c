@@ -370,7 +370,8 @@ class BBB_Medic
    {
     ChimeraCharacter member = ChimeraCharacter.Cast(agent.GetControlledEntity());
     if (!member || member == casualty || member == healer || !Fit(member) || member.IsInVehicle()) continue;
-    if (!HasSmokeGrenade(member)) continue;
+    // Squad smoke's thrower rules: not under a player/GM order, not mid-drag or on another job.
+    if (!BBB_Smoke.IsFitThrower(member, SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent)))) continue;
     float d = vector.DistanceXZ(member.GetOrigin(), smokePos);
     if (d <= bestThrowerDist)
     {
@@ -583,7 +584,11 @@ modded class SCR_AIMedicHealBehavior
   if (BBB_Drag.Busy(healer)) return 0;
   bool fullOn = BBB_Medic.On(healer);
   bool smokeOn = BBB_Medic.SmokeOn(healer);
-  if ((fullOn || smokeOn) && EvaluatePriorityLevel() < PRIORITY_LEVEL_GAMEMASTER && BBB_Medic.FightFirst(m_Utility))
+  // An explicit heal order (a player's command or a Game Master's) isn't held, dragged or
+  // second-guessed; a host's own order at the player's level still is (as BBB_CrewStays.Keep).
+  float level = EvaluatePriorityLevel();
+  bool ordered = level >= PRIORITY_LEVEL_GAMEMASTER || (level >= PRIORITY_LEVEL_PLAYER && !BBB.s_Hooks.HostOrder(BBB_Medic.GroupOf(healer)));
+  if ((fullOn || smokeOn) && !ordered && BBB_Medic.FightFirst(m_Utility))
   {
    if (m_iBBBDecision != BBB_Medic.HOLD_FIGHTING) PrintFormat("[BBB] MEDIC %1 -> %2: %3", BBB_Medic.Name(healer), BBB_Medic.Name(casualty), BBB_Medic.Reason(BBB_Medic.HOLD_FIGHTING));
    if (m_iBBBDecision != BBB_Medic.HOLD_FIGHTING) BBB_Think.Note(healer, "Medic", BBB_Medic.Name(casualty) + ": " + BBB_Medic.Reason(BBB_Medic.HOLD_FIGHTING));
@@ -592,16 +597,14 @@ modded class SCR_AIMedicHealBehavior
    BBB_Medic.MarkHeld(casualty);
    return 0;
   }
-  // A Game Master's explicit heal order isn't turned into a drag either.
-  if (EvaluatePriorityLevel() < PRIORITY_LEVEL_GAMEMASTER && BBB_Drag.Consider(m_Utility, healer, casualty, EvaluatePriorityLevel())) return 0;
+  if (!ordered && BBB_Drag.Consider(m_Utility, healer, casualty, EvaluatePriorityLevel())) return 0;
   if (!fullOn && !smokeOn)
   {
    // Vanilla healing (off, or the test's vanilla side): on his way while this runs.
    if (m_Utility.GetCurrentBehavior() == this) BBB_Medic.MarkGoing(healer, casualty);
    return priority;
   }
-  // A Game Master's explicit order isn't second-guessed.
-  if (EvaluatePriorityLevel() >= PRIORITY_LEVEL_GAMEMASTER) return priority;
+  if (ordered) return priority;
   float now = BBB_Medic.NowMs();
   if (m_iBBBDecision < 0 || now - m_fBBBCheckedAt >= 1000)
   {
@@ -712,6 +715,7 @@ modded class SCR_AIFindMedic
    if (info.HasUnitState(EUnitState.UNCONSCIOUS)) continue;
    if (excludeDrivers && info.HasUnitState(EUnitState.PILOT)) continue;
    if (info.GetAIState() != EUnitAIState.AVAILABLE) continue;
+   if (BBB.PlayerOf(man)) continue; // a player playing medic isn't sent: his agent doesn't run
    if (BBB_Medic.HealingItems(man) < BBB_Medic.MEDIC_ITEMS) continue;
    float distance = vector.Distance(man.GetOrigin(), entToHeal.GetOrigin());
    if (distance > bestDistance) continue;

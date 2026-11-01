@@ -131,6 +131,8 @@ class BBB_Flares
  static bool Handles(SCR_AIGroup group)
  {
   if (!s_bOn || !BBB.IsStarted() || !Replication.IsServer()) return false;
+  // BBB never lights for a player's squad (TryIlluminate, Allowed): vanilla keeps doing it.
+  if (!group || BBB.HasPlayer(group)) return false;
   array<SCR_AIGroup> groups = {};
   BBB.s_Hooks.GetGroups(groups);
   return groups.Contains(group);
