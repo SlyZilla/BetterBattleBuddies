@@ -377,7 +377,8 @@ class BBB_DriverAlignment
   }
   // Restore only AI we parked, even after that AI leaves the seat. A player
   // taking possession owns its activation state from that point onward.
-  if (state.m_Driver && !BBB.PlayerOf(state.m_Driver) && !state.m_Driver.GetCharacterController().IsPlayerControlled())
+  // Never a dead driver's: vanilla switched his AI off at death (as Unstick and ArmorReaction).
+  if (state.m_Driver && BBB.IsAlive(state.m_Driver) && !BBB.PlayerOf(state.m_Driver) && !state.m_Driver.GetCharacterController().IsPlayerControlled())
   {
    AIControlComponent ai = AIControlComponent.Cast(state.m_Driver.FindComponent(AIControlComponent));
    if (state.m_bParkedAI && ai && !ai.IsAIActivated()) ai.ActivateAI();

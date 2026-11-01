@@ -258,7 +258,7 @@ class BBB_TacticDrill
   {
    if (reached) s_iPointsDone++;
    PrintFormat("[BBB] TACTIC %1: search point %2 %3 (%4 left)", BBB.s_Hooks.NameOf(state.m_Group), target, reached, state.m_aPoints.Count() - 1);
-   state.m_aPoints.Remove(0);
+   state.m_aPoints.RemoveOrdered(0); // Remove(0) moved the farthest point up next
    state.m_fSwapAt = now;
    Swap(state, now);
    if (state.m_aPoints.IsEmpty()) return true;

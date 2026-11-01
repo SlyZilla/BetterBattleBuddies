@@ -220,6 +220,26 @@ class BBB_Grenades
 			}
 		}
 
+		// Anyone else on the line who isn't an enemy: a player, or another friendly squad.
+		Faction throwerFac = throwingGroup.GetFaction();
+		vector middle = (throwerPos + landingPos) * 0.5;
+		s_aNearbyEntities.Clear();
+		GetGame().GetWorld().QueryEntitiesBySphere(middle, vector.Distance(throwerPos, landingPos) * 0.5 + s_fThrowCorridorRadiusM, CollectNearbyEntity);
+		foreach (IEntity ent : s_aNearbyEntities)
+		{
+			ChimeraCharacter ch = ChimeraCharacter.Cast(ent);
+			if (!ch || ch == thrower || !BBB.IsAlive(ch)) continue;
+			bool ally = BBB.PlayerOf(ch) != 0;
+			FactionAffiliationComponent aff = FactionAffiliationComponent.Cast(ch.FindComponent(FactionAffiliationComponent));
+			if (!ally && aff && throwerFac)
+			{
+				Faction f = aff.GetAffiliatedFaction();
+				if (!f) f = aff.GetDefaultAffiliatedFaction();
+				ally = f && !throwerFac.IsFactionEnemy(f);
+			}
+			if (ally && LineIntersectsSphere(throwerPos, landingPos, ch.GetOrigin(), s_fThrowCorridorRadiusM)) return false;
+		}
+
 		return true;
 	}
 
@@ -481,6 +501,13 @@ class BBB_AIThrowFrag : SCR_AIThrowGrenadeToBehavior
 		float priority = super.CustomEvaluate();
 		// Never cancel a throw already under way: only before the animation starts.
 		if (priority <= 0 || !m_Utility || !m_Utility.m_OwnerEntity || GetActionState() == EAIActionState.RUNNING) return priority;
+		// Hold fire or an order that came after the throw was chosen.
+		bool holdFire = m_Utility.m_CombatComponent && m_Utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE;
+		if (holdFire || BBB_OrderIntent.Blocks(m_Utility))
+		{
+			Fail();
+			return 0;
+		}
 		if (BBB_Grenades.IsArcClear(m_Utility.m_OwnerEntity, m_vTargetPosition.m_Value)) return priority;
 		BBB_Grenades.s_iArcVetoes++;
 		Fail();

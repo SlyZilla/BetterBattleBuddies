@@ -299,12 +299,23 @@ class BBB_FeatureAuditTest : BBB_AimTest
 		m_iGrenadesBefore = after;
 		BBB_Grenades.s_bOn = true;
 		vector leader = m_Group.GetLeaderEntity().GetOrigin();
+		// Prepare holds both squads' fire so the audit isn't a firefight; frags respect hold fire
+		// (0.1.8), so that is checked first, then the squad is let fire just for the throw.
+		Audit("frag-vetoed-on-hold-fire", !BBB_Grenades.TryThrowGrenadeAt(m_Group, leader + m_vEnemyDir * 24, "audit hold fire"));
+		m_Group.GetGroupUtilityComponent().SetCombatMode(EAIGroupCombatMode.FIRE_AT_WILL); m_Group.GetGroupUtilityComponent().EvaluateCombatMode();
 		bool vetoed = !BBB_Grenades.TryThrowGrenadeAt(m_Group, leader + m_vEnemyDir * 5, "audit friendly blast");
 		Audit("frag-vetoed-with-friendlies-in-blast", vetoed);
 		bool dispatched = BBB_Grenades.TryThrowGrenadeAt(m_Group, leader + m_vEnemyDir * 24, "audit clear");
 		BBB_Grenades.s_bOn = false;
 		Audit("frag-dispatched-clear-spot", dispatched);
+		GetGame().GetCallqueue().CallLater(HoldFireAgain, 3000);
 		GetGame().GetCallqueue().CallLater(FragLanded, 9000);
+	}
+
+	// The throw is under way by now (a running throw isn't cancelled): back to holding fire.
+	void HoldFireAgain()
+	{
+		if (m_Group) { m_Group.GetGroupUtilityComponent().SetCombatMode(EAIGroupCombatMode.HOLD_FIRE); m_Group.GetGroupUtilityComponent().EvaluateCombatMode(); }
 	}
 
 	void FragLanded()

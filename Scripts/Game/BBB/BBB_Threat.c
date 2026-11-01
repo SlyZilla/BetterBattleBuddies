@@ -262,6 +262,9 @@ class BBB_Threat
 		if (utility.m_AIInfo && (utility.m_AIInfo.HasUnitState(EUnitState.IN_TURRET) || utility.m_AIInfo.HasUnitState(EUnitState.PILOT))) return false;
 		if (BBB_Drag.Busy(soldier)) return false;
 		if (BBB_OrderIntent.Blocks(utility)) return false;
+		// A player's squad is his (and AiO's) to run: no forced stance on his men.
+		SCR_AIGroup group = BBB_Buildings.GroupOf(utility);
+		if (!group || BBB.HasPlayer(group)) return false;
 		return true;
 	}
 

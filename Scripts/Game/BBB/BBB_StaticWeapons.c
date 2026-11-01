@@ -585,6 +585,12 @@ class BBB_StaticWeapons
 			// Dead or incapacitated: nothing to hand back, just free the seat
 			if (!job.m_Gunner || !BBB.IsAlive(job.m_Gunner) || !BBB_VehicleHelpers.IsAble(job.m_Gunner))
 			{
+				// Downed on his way: his get-in goes too, or once revived he walks to the gun untracked.
+				if (!job.m_bMounted && job.m_GetIn)
+				{
+					EAIActionState downState = job.m_GetIn.GetActionState();
+					if (downState != EAIActionState.COMPLETED && downState != EAIActionState.FAILED) job.m_GetIn.Fail();
+				}
 				if (job.m_Slot && job.m_Gunner && job.m_Slot.IsReservedBy(job.m_Gunner)) job.m_Slot.SetReserved(null);
 				Forget(j);
 				continue;

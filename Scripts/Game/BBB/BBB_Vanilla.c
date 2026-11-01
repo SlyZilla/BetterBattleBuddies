@@ -93,6 +93,13 @@ class BBB_Vanilla
   if (s_bFrameSource) queue.Remove(BBB.Frame);
   s_bFrameSource = false;
   if (BBB.IsStarted()) BBB.Stop();
+  // The heal and reflex hooks run whether or not BBB started (-bbbVanilla 0 with no host mod): their
+  // watches and maps are cleared here too, or the next mission's medic watch never restarts.
+  BBB_Medic.Stop();
+  BBB_Drag.Stop();
+  // Same for the explosion reflex watch and vehicle hits (fed from damage hooks).
+  BBB_Threat.Stop();
+  BBB_Transport.ClearHits();
  }
 }
 

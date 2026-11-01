@@ -122,7 +122,14 @@ class BBB_Settings
  static bool Get(string key, out string value)
  {
   Refresh();
-  if (System.GetCLIParam(key, value)) return true;
+  if (System.GetCLIParam(key, value))
+  {
+   // Cleaned like a preset value: "-bbbSmoke true" or a bare "-bbbMedic" read as off where
+   // features test == "1", and numbers went past their range.
+   BBB_Setting given = Find(key);
+   if (given) value = given.Clean(value);
+   return true;
+  }
   if (s_Values.Find(key, value)) return true;
   if (!s_Touched.Contains(key)) return false;
   BBB_Setting setting = Find(key);

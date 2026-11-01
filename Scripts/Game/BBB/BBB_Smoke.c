@@ -464,11 +464,12 @@ class BBB_Smoke
 			}
 		}
 
-		// Clean up stale squad cooldowns (> 120 s old)
+		// Clean up stale squad cooldowns (past the cooldown, at least 120 s: the setting goes to 180 s)
+		float keepMs = Math.Max(120000.0, s_fCooldownSquadS * 1000.0);
 		for (int c = s_mGroupCooldown.Count() - 1; c >= 0; c--)
 		{
 			SCR_AIGroup grp = s_mGroupCooldown.GetKey(c);
-			if (!grp || nowMs - s_mGroupCooldown.GetElement(c) > 120000.0)
+			if (!grp || nowMs - s_mGroupCooldown.GetElement(c) > keepMs)
 			{
 				s_mGroupCooldown.RemoveElement(c);
 			}

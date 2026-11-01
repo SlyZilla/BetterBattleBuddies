@@ -18,6 +18,25 @@
 - Soldiers who change squads (a Game Master regroup, a merge, a recruit) no longer carry the old squad's state with them: a man moved out of a holding squad advances again, a gunner leaves the old squad's static gun, and a squad that a player takes over during a fall-back stops falling back instead of being stuck half-way.
 - Turret gunners under a player or Game Master order, in a player's squad, or in a vehicle the host mod leaves alone no longer fire bursts at a heard threat on their own.
 - Soldiers looking around when BBB stops (a host mod turning it off mid-mission) turn their heads back instead of staying in free-look.
+- Morale now works on big missions. Only the first 64 AI squads in the world ever got a morale check, so on a busy Conflict or Game Master mission the squads actually fighting often never lost heart, fell back or surrendered while idle garrisons held every slot.
+- A squad riding in a truck no longer tries to fall back while still seated, and a soldier who has surrendered is no longer ordered to run off with his squad. A soldier with a loaded rifle no longer counts as out of ammo just because his empty launcher is still in his hands.
+- A player's heal command to his AI medic is carried out. Before, the medic stayed put while he was pinned down or could see an enemy, or turned the order into a drag to cover; only a Game Master's order was obeyed straight away. A player who plays a medic is also no longer picked over the AI for a heal his agent can't carry out.
+- The medic's covering smoke is never thrown by a squadmate who is under a player's or Game Master's order, dragging a casualty or busy with another job.
+- The "Smoke squad cooldown" setting works above 120 seconds (before, a squad could smoke again after 120 seconds whatever it was set to).
+- Launch parameters are read the same way as the Settings tab: `-bbbSmoke true`, `-bbbGrenades on` or a parameter given without a value no longer switch a feature off, and numbers are kept inside their range.
+- The "Gates and doors" and "Unstick vehicles" switches turn off everything they describe: AI drivers no longer open gates ahead, and soldiers on truck beds are no longer set down, when they are off (the built-in Vanilla preset included).
+- A player driving a vehicle with AI riding in the back keeps his passengers until he lets them out: BBB no longer unloads them when he slows down under fire (they also wouldn't board his vehicle again), and no longer closes his doors.
+- A held gun whose gunner is killed or knocked out is manned again. The body in the seat counted as a gunner, so the gun stayed silent for the rest of the fight.
+- A vehicle being backed out of a dead end no longer stays steered by BBB once a player (or a Game Master possessing the driver) takes the wheel, and a manoeuvre dropped by a host mod gives the driver his AI back instead of leaving him frozen in the seat.
+- A soldier knocked out on his way to a static gun no longer walks to it on his own once revived.
+- Squads searching for a lost enemy check the spots nearest where he was last seen first, instead of jumping to the farthest one after the first.
+- Player-led squads keep the game's own illumination flares at night; BBB had switched them off without firing its own.
+- Without a host mod and with `-bbbVanilla 0`, medic and casualty-drag state is cleared between missions, so medics keep watching their casualties in the next mission.
+- Vehicle gunners stop their bursts at a heard threat as soon as their squad is told to hold fire, and a frag that hasn't left the hand yet is put away on hold fire or a new order.
+- Soldiers no longer throw a frag when a player or a soldier from another friendly squad stands between them and the target (before, only their own squad was checked).
+- A launcher gunner who picked a rocket for an enemy soldier holds it if, while he reloads, the man gets too close or friendlies move in on him.
+- AI in a player's squad are no longer thrown to the ground by BBB's explosion and armour reflexes; the player's squad is left to the player.
+- A driver killed while BBB was lining his vehicle up for the gunner no longer has his AI switched back on.
 
 ## 0.1.7 — released
 

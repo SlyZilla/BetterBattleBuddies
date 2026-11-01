@@ -101,6 +101,12 @@ class BBB_Morale
 
 	// State tracking
 	protected static ref array<ref BBB_GroupMoraleState> s_States = {};
+	// s_States by group (rebuilt each tick): other features ask IsWithdrawing per soldier.
+	protected static ref map<SCR_AIGroup, BBB_GroupMoraleState> s_mStateOf = new map<SCR_AIGroup, BBB_GroupMoraleState>();
+	// Every group BBB looks after gets a state (its strength when first seen is the loss baseline).
+	// It was 64: on a mission with more groups than that, every squad past the 64th never had
+	// morale at all, often the fighting ones while idle garrisons held the slots.
+	static const int MAX_STATES = 256;
 	protected static ref array<ref BBB_SurrenderState> s_Surrendered = {};
 
 	// Performance counters
@@ -158,11 +164,8 @@ class BBB_Morale
 	static bool IsWithdrawing(SCR_AIGroup group)
 	{
 		if (!group || !s_bOn) return false;
-		foreach (BBB_GroupMoraleState state : s_States)
-		{
-			if (state && state.m_Group == group && state.m_bWithdrawing) return true;
-		}
-		return false;
+		BBB_GroupMoraleState state = s_mStateOf.Get(group);
+		return state && state.m_bWithdrawing;
 	}
 
 	// The squad's current (or last) withdrawal: the threat it backs away from and its bound end.
@@ -238,21 +241,22 @@ class BBB_Morale
 		BaseWeaponManagerComponent wm = BaseWeaponManagerComponent.Cast(soldier.FindComponent(BaseWeaponManagerComponent));
 		if (!inv || !wm) return false;
 
-		BaseWeaponComponent weapon = wm.GetCurrentWeapon();
-		if (!weapon)
+		// His rifle or MG first: an empty launcher (or a spent disposable) still in hand after
+		// the shot doesn't make a man with a loaded rifle out of ammo.
+		BaseWeaponComponent weapon;
+		array<IEntity> weapons = {};
+		wm.GetWeaponsList(weapons);
+		foreach (IEntity wEnt : weapons)
 		{
-			array<IEntity> weapons = {};
-			wm.GetWeaponsList(weapons);
-			foreach (IEntity wEnt : weapons)
+			if (!wEnt) continue;
+			BaseWeaponComponent w = BaseWeaponComponent.Cast(wEnt.FindComponent(BaseWeaponComponent));
+			if (w && (w.GetWeaponType() == EWeaponType.WT_RIFLE || w.GetWeaponType() == EWeaponType.WT_MACHINEGUN || w.GetWeaponType() == EWeaponType.WT_SNIPERRIFLE))
 			{
-				BaseWeaponComponent w = BaseWeaponComponent.Cast(wEnt.FindComponent(BaseWeaponComponent));
-				if (w && (w.GetWeaponType() == EWeaponType.WT_RIFLE || w.GetWeaponType() == EWeaponType.WT_MACHINEGUN || w.GetWeaponType() == EWeaponType.WT_SNIPERRIFLE))
-				{
-					weapon = w;
-					break;
-				}
+				weapon = w;
+				break;
 			}
 		}
+		if (!weapon) weapon = wm.GetCurrentWeapon();
 		if (!weapon) return true;
 
 		array<BaseMuzzleComponent> muzzles = {};
@@ -280,21 +284,17 @@ class BBB_Morale
 
 	protected static void DropWithdrawal(SCR_AIGroup group, float now)
 	{
-		foreach (BBB_GroupMoraleState state : s_States)
-		{
-			if (state && state.m_Group == group && state.m_bWithdrawing)
-				EndWithdrawal(state, now, false, "left to a player, the host or a vehicle", 0);
-		}
+		BBB_GroupMoraleState state = s_mStateOf.Get(group);
+		if (state && state.m_bWithdrawing)
+			EndWithdrawal(state, now, false, "left to a player, the host or a vehicle", 0);
 	}
 
 	protected static BBB_GroupMoraleState GetOrCreateState(SCR_AIGroup group, int currentCount)
 	{
-		foreach (BBB_GroupMoraleState state : s_States)
-		{
-			if (state && state.m_Group == group) return state;
-		}
+		BBB_GroupMoraleState found = s_mStateOf.Get(group);
+		if (found) return found;
 
-		if (s_States.Count() >= 64) return null;
+		if (s_States.Count() >= MAX_STATES) return null;
 
 		BBB_GroupMoraleState newState = new BBB_GroupMoraleState();
 		newState.m_Group = group;
@@ -302,6 +302,7 @@ class BBB_Morale
 		newState.m_fMorale = 0;
 		newState.m_fNextCheck = 0;
 		s_States.Insert(newState);
+		s_mStateOf.Set(group, newState);
 		return newState;
 	}
 
@@ -458,7 +459,7 @@ class BBB_Morale
 			ChimeraCharacter character = ChimeraCharacter.Cast(agent.GetControlledEntity());
 			if (!character || !BBB.IsAlive(character)) continue;
 			CharacterControllerComponent controller = character.GetCharacterController();
-			if (!controller || controller.IsUnconscious()) continue;
+			if (!controller || controller.IsUnconscious() || character.IsInVehicle()) continue;
 			outCenter = outCenter + character.GetOrigin();
 			count++;
 		}
@@ -563,6 +564,8 @@ class BBB_Morale
 			if (!ent || !BBB.IsAlive(ent)) continue;
 			ChimeraCharacter character = ChimeraCharacter.Cast(ent);
 			if (!character || character.GetCharacterController().IsUnconscious()) continue;
+			// Riders in a vehicle's cargo can't bound, and a man who surrendered stays put.
+			if (character.IsInVehicle() || IsSurrendered(character)) continue;
 
 			SCR_AIUtilityComponent utility = SCR_AIUtilityComponent.Cast(agent.FindComponent(SCR_AIUtilityComponent));
 			if (!utility || !utility.m_CombatMoveState || BBB_OrderIntent.Blocks(utility)) continue;
@@ -704,19 +707,24 @@ class BBB_Morale
 
 	// ---------------------------------------------------------------- surrender
 
+	static bool IsSurrendered(IEntity soldier)
+	{
+		foreach (BBB_SurrenderState existing : s_Surrendered)
+		{
+			if (existing && existing.m_Soldier == soldier) return true;
+		}
+		return false;
+	}
+
 	protected static void CheckSurrender(ChimeraCharacter soldier, SCR_AIUtilityComponent utility)
 	{
 		if (!s_bSurrenderOn || !soldier || !utility || !utility.m_CombatComponent || !utility.m_PerceptionComponent) return;
 		if (BBB.PlayerOf(soldier) || BBB_OrderIntent.Blocks(utility)) return;
 
 		CharacterControllerComponent controller = soldier.GetCharacterController();
-		if (!controller || controller.IsDead() || controller.IsUnconscious() || controller.IsPlayerControlled()) return;
+		if (!controller || controller.IsDead() || controller.IsUnconscious() || controller.IsPlayerControlled() || soldier.IsInVehicle()) return;
 
-		// Already surrendered
-		foreach (BBB_SurrenderState existing : s_Surrendered)
-		{
-			if (existing && existing.m_Soldier == soldier) return;
-		}
+		if (IsSurrendered(soldier)) return;
 
 		// Condition 1: Must be completely out of ammunition
 		if (!IsOutOfAmmo(soldier)) return;
@@ -800,14 +808,20 @@ class BBB_Morale
 		BBB.s_Hooks.GetGroups(groups);
 
 		// Clean up invalid states
+		set<SCR_AIGroup> current = new set<SCR_AIGroup>();
+		foreach (SCR_AIGroup listed : groups)
+			if (listed) current.Insert(listed);
+		s_mStateOf.Clear();
 		for (int i = s_States.Count() - 1; i >= 0; i--)
 		{
 			BBB_GroupMoraleState gs = s_States[i];
-			if (!gs || !gs.m_Group || !groups.Contains(gs.m_Group))
+			if (!gs || !gs.m_Group || !current.Contains(gs.m_Group))
 			{
 				if (gs) CancelMoves(gs);
 				s_States.RemoveOrdered(i);
+				continue;
 			}
+			s_mStateOf.Set(gs.m_Group, gs);
 		}
 
 		// Clean up surrendered soldiers
@@ -900,6 +914,7 @@ class BBB_Morale
 			if (gone) CancelMoves(gone);
 		}
 		s_States.Clear();
+		s_mStateOf.Clear();
 	}
 }
 

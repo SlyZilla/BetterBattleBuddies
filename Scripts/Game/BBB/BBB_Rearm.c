@@ -409,7 +409,7 @@ class BBB_Rearm
    entry.m_Until = nowMs + FAILURE_BACKOFF_MS;
    return;
   }
-  if (s_aFailures.Count() >= MAX_FAILURE_RECORDS) s_aFailures.Remove(0);
+  if (s_aFailures.Count() >= MAX_FAILURE_RECORDS) s_aFailures.RemoveOrdered(0); // the oldest
   BBB_RearmFailure failure = new BBB_RearmFailure();
   failure.m_Soldier = soldier;
   failure.m_Corpse = corpse;
