@@ -67,6 +67,7 @@ class BBB_Drag
  static int s_iStarted;
  static int s_iArrived;
  static int s_iNoSpot;
+ static int s_iClampsMuted; // ACE's input clamp found armed on an AI carrier and switched off
 
  static void Stop()
  {
@@ -80,6 +81,7 @@ class BBB_Drag
   s_iStarted = 0;
   s_iArrived = 0;
   s_iNoSpot = 0;
+  s_iClampsMuted = 0;
  }
 
  protected static void StartTicking()
@@ -178,6 +180,31 @@ class BBB_Drag
   if (!carried) return;
   int unused;
   GetGame().GetScriptModule().Call(controller, "ACE_ReleaseCarried", false, unused, carried);
+ }
+
+ // ACE's carriable component limits its carrier's walking by rewriting the machine's own input
+ // every frame (no forward or sideways while dragging) on whichever machine owns the carrier.
+ // An AI carrier is owned by the server, so on a player-hosted game the host's W/A/D stopped
+ // working for as long as any AI dragged a casualty (live report 1 Nov: possessed soldier
+ // "freezes", S and mouse still work). AI don't walk by input, so the clamp only ever hit the
+ // host: switch its frame event off for AI carriers. A player carrier keeps it.
+ protected static typename s_tCarriable;
+ static ScriptComponent AceCarriable(IEntity healer)
+ {
+  IEntity carried = AceCarried(healer);
+  if (!carried) return null;
+  if (!s_tCarriable) s_tCarriable = String("ACE_CarriableEntityComponent").ToType();
+  if (!s_tCarriable) return null;
+  return ScriptComponent.Cast(carried.FindComponent(s_tCarriable));
+ }
+
+ static void AceMuteAiCarrierInput(IEntity healer)
+ {
+  if (GetGame().GetPlayerManager().GetPlayerIdFromControlledEntity(healer) > 0) return;
+  ScriptComponent carriable = AceCarriable(healer);
+  if (!carriable || !(carriable.GetEventMask() & EntityEvent.FRAME)) return;
+  carriable.ClearEventMask(carriable.GetOwner(), EntityEvent.FRAME);
+  s_iClampsMuted++;
  }
 
  // ---------------------------------------------------------------- decision
@@ -432,6 +459,8 @@ class BBB_Drag
   if (!job.m_Healer || !BBB_Medic.Fit(job.m_Healer)) return "healer hit";
   if (!job.m_Casualty || !BBB.IsAlive(job.m_Casualty)) return "casualty died";
   bool carrying = AceBool(job.m_Healer, "ACE_IsCarrier");
+  // Every tick: the pickup may land after AceStart, and ACE re-arms the clamp on a carrier change.
+  if (carrying) AceMuteAiCarrierInput(job.m_Healer);
   if (!job.m_bConfirmed)
   {
    if (carrying) job.m_bConfirmed = true;

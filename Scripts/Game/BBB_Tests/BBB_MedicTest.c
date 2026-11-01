@@ -49,6 +49,8 @@ class BBB_MedicTest : BBB_AimTest
  // drag itself work?), then fights with normal sentries, BBB_Drag on ("BBB") vs off
  // ("vanilla"), US and USSR healers. BBB_Medic's holds stay off.
  static bool s_bDrag;
+ protected int m_iClampSamples;
+ protected int m_iClampArmed;
  ref array<bool> m_aStill = {};
  bool m_bStill;
  int m_iDragsAtStart;
@@ -373,6 +375,18 @@ class BBB_MedicTest : BBB_AimTest
    StartMedicRound(m_iMRound);
    return;
   }
+  // ACE's carrier input clamp must stay off for AI draggers (it froze the host's W/A/D, 1 Nov).
+  if (s_bDrag)
+  {
+   foreach (BBB_DragJob job : BBB_Drag.s_aJobs)
+   {
+    if (!job.m_bConfirmed) continue;
+    ScriptComponent carriable = BBB_Drag.AceCarriable(job.m_Healer);
+    if (!carriable) continue;
+    m_iClampSamples++;
+    if (carriable.GetEventMask() & EntityEvent.FRAME) m_iClampArmed++;
+   }
+  }
   if (!m_bHooked && now >= m_fHookAt)
   {
    m_bHooked = true;
@@ -488,6 +502,11 @@ class BBB_MedicTest : BBB_AimTest
  protected void MedicFinish()
  {
   GetGame().GetCallqueue().Remove(MedicTick);
+  if (s_bDrag)
+  {
+   MCheck("ace-clamp-armed-and-muted", BBB_Drag.s_iClampsMuted > 0, string.Format("%1 AI carriers had ACE's input clamp on and got it switched off", BBB_Drag.s_iClampsMuted));
+   MCheck("ace-clamp-off-while-dragging", m_iClampSamples > 0 && m_iClampArmed == 0, string.Format("clamp on in %1 of %2 mid-drag samples", m_iClampArmed, m_iClampSamples));
+  }
   foreach (string key : m_aTotalKeys)
    PrintFormat("[BBB] MEDICTEST TOTAL %1: %2", key, m_mTotals.Get(key));
   ObserversSystem observers = ObserversSystem.Cast(GetGame().GetWorld().FindSystem(ObserversSystem));
