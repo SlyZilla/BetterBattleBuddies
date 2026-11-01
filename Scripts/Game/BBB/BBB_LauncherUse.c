@@ -366,6 +366,10 @@ modded class SCR_AICombatComponent
   BaseTarget current = GetCurrentTarget();
   if (why.IsEmpty() && current && BBB_LauncherUse.Armour(current.GetUnitType())) why = "armour";
   if (why.IsEmpty() && m_bBBBRoundSeated && current != m_BBBLaunchTarget && !BBBTakeOver(current)) why = "target changed";
+  // Range and friendlies were judged at the pick; a reload takes ~10 s, in which the man can close
+  // inside the minimum or friendlies move in on him.
+  if (why.IsEmpty() && m_bBBBRoundSeated && m_BBBLaunchTarget.GetDistance() < m_fBBBLaunchMin) why = "too close";
+  if (why.IsEmpty() && m_bBBBRoundSeated && BBBGroup() && !BBB_Grenades.IsBlastAreaClearOfFriendlies(m_BBBLaunchTarget.GetLastSeenPosition(), BBBGroup(), BBB_LauncherUse.FRIEND_M)) why = "friendlies near";
   if (why.IsEmpty() && m_bBBBRoundSeated && !IsTargetVisible(m_BBBLaunchTarget) && m_BBBLaunchTarget.GetTimeSinceSeen() >= 3) why = "target out of sight";
   if (!why.IsEmpty())
   {

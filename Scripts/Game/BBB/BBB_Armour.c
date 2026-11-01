@@ -485,7 +485,7 @@ class BBB_Armour
 
  static void CheckGroupAntiArmor(SCR_AIGroup group, IEntity forcedThreat = null)
  {
-  if (!group || !ScatterOn()) return;
+  if (!group || !ScatterOn() || BBB.HasPlayer(group)) return; // a player's squad isn't forced down
   IEntity threat = forcedThreat;
   if (!threat)
   {
