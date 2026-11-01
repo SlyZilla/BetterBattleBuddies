@@ -148,7 +148,7 @@ class BBB_Teams
   return items.Count();
  }
 
- // Wells he carries ammunition for but no weapon of his takes.
+ // Wells he carries ammunition for but no weapon of his takes (walks his inventory: tests only).
  static void ForeignWells(ChimeraCharacter soldier, notnull array<string> takes, notnull array<string> wells)
  {
   wells.Clear();
@@ -164,6 +164,23 @@ class BBB_Teams
    string well = magazine.GetMagazineWell().Type().ToString();
    if (!takes.Contains(well) && !wells.Contains(well)) wells.Insert(well);
   }
+ }
+
+ // Magazines or rockets for this gun he carries: the AI's own cached count (the one vanilla's
+ // resupply uses to find a provider), not a walk over his inventory.
+ static int Carries(ChimeraCharacter soldier, BaseMuzzleComponent gun)
+ {
+  if (!soldier || !gun || !gun.GetMagazineWell()) return 0;
+  SCR_AICombatComponent combat = SCR_AICombatComponent.Cast(soldier.FindComponent(SCR_AICombatComponent));
+  if (!combat) return 0;
+  return combat.GetMagazineCount(gun.GetMagazineWell().Type(), true);
+ }
+
+ static bool HasPairIn(SCR_AIGroup group)
+ {
+  foreach (BBB_Pair pair : s_aPairs)
+   if (pair.m_Group == group) return true;
+  return false;
  }
 
  // On foot, awake, AI-driven.
@@ -257,8 +274,8 @@ class BBB_Teams
   array<ChimeraCharacter> gunners = {};
   array<BaseMuzzleComponent> gunMuzzles = {};
   array<bool> gunLaunchers = {};
-  array<ChimeraCharacter> carriers = {};
-  array<ref array<string>> carried = {};
+  array<ChimeraCharacter> members = {};
+  array<ref array<string>> memberTakes = {};
   foreach (AIAgent agent : agents)
   {
    if (!agent) continue;
@@ -273,14 +290,10 @@ class BBB_Teams
     gunMuzzles.Insert(special);
     gunLaunchers.Insert(launcher);
    }
-   ref array<string> wells = {};
-   ForeignWells(soldier, takes, wells);
-   if (!wells.IsEmpty())
-   {
-    carriers.Insert(soldier);
-    carried.Insert(wells);
-   }
+   members.Insert(soldier);
+   memberTakes.Insert(takes);
   }
+  if (gunners.IsEmpty() && !HasPairIn(group)) return; // nothing to pair, nothing to drop
   // Keep a running pick-up (its gunner is dead, so he isn't among the gunners any more).
   array<ChimeraCharacter> taken = {};
   for (int i = s_aPairs.Count() - 1; i >= 0; i--)
@@ -289,9 +302,9 @@ class BBB_Teams
    if (old.m_Group != group) continue;
    if (old.m_iJob == PICKUP) { taken.Insert(old.m_Assistant); continue; }
    int at = gunners.Find(old.m_Gunner);
-   int ci = carriers.Find(old.m_Assistant);
+   int mi = members.Find(old.m_Assistant);
    // Still a match: keep him (and his running job).
-   if (at >= 0 && ci >= 0 && carried[ci].Contains(old.m_sWell) && WellOf(gunMuzzles[at]) == old.m_sWell && BBB.IsAlive(old.m_Assistant))
+   if (at >= 0 && mi >= 0 && WellOf(gunMuzzles[at]) == old.m_sWell && !memberTakes[mi].Contains(old.m_sWell) && Carries(old.m_Assistant, gunMuzzles[at]) > 0)
    {
     old.m_GunMuzzle = gunMuzzles[at];
     taken.Insert(old.m_Assistant);
@@ -308,12 +321,14 @@ class BBB_Teams
    string well = WellOf(gunMuzzles[gi]);
    ChimeraCharacter best;
    float bestDist = float.MAX;
-   for (int c = 0; c < carriers.Count(); c++)
+   for (int c = 0; c < members.Count(); c++)
    {
-    ChimeraCharacter carrier = carriers[c];
-    if (carrier == gunner || taken.Contains(carrier) || !carried[c].Contains(well)) continue;
+    ChimeraCharacter carrier = members[c];
+    if (carrier == gunner || taken.Contains(carrier) || memberTakes[c].Contains(well)) continue;
     float d = vector.DistanceSq(carrier.GetOrigin(), gunner.GetOrigin());
-    if (d < bestDist) { bestDist = d; best = carrier; }
+    if (d >= bestDist || Carries(carrier, gunMuzzles[gi]) <= 0) continue;
+    bestDist = d;
+    best = carrier;
    }
    if (!best) continue;
    BBB_Pair pair = new BBB_Pair();
