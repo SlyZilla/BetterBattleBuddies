@@ -125,6 +125,7 @@ class BBB
   BBB_DoorUnstick.Read();
   BBB_ContactRelay.Read();
   BBB_Claims.Read();
+  BBB_Teams.Read();
   BBB_Squad.Read();
   BBB_Tactic.Read();
   BBB_CoverFire.Read();
@@ -165,6 +166,7 @@ class BBB
   BBB_ContactRelay.Stop();
   BBB_OrderLeash.Stop();
   BBB_Claims.Stop();
+  BBB_Teams.Stop();
   BBB_Squad.Stop();
   BBB_Tactic.Stop();
   BBB_Transport.ClearHits();
@@ -198,6 +200,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.launchers", t);
 		if (s_Combat) s_Combat.Tick();
 		t = BBB_Perf.Lap("tick.combat", t);
+  BBB_Teams.Tick();
+  t = BBB_Perf.Lap("tick.teams", t);
 		array<SCR_AIGroup> rearmGroups = {};
 		s_Hooks.GetGroups(rearmGroups);
 		BBB_Rearm.WatchTrips(rearmGroups);
