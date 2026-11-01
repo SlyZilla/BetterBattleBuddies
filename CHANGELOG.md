@@ -37,6 +37,9 @@
 - A launcher gunner who picked a rocket for an enemy soldier holds it if, while he reloads, the man gets too close or friendlies move in on him.
 - AI in a player's squad are no longer thrown to the ground by BBB's explosion and armour reflexes; the player's squad is left to the player.
 - A driver killed while BBB was lining his vehicle up for the gunner no longer has his AI switched back on.
+- A gunner stays on his gun when the vehicle has no driver. Before, a gun truck or armoured car parked with only its gunner (a Game Master checkpoint, say), or one whose driver was killed, was abandoned by everyone aboard as soon as an enemy was known nearby, and the squad never used it again. Now only the riders get out to fight on foot, and a Game Master's order keeps everyone where he put them.
+- Soldiers shoot at an armoured vehicle's crew when they stand in the hatches. Once riflemen had learned their rounds couldn't hurt an APC, they also held fire at its commander with his head out. Now that lesson covers the hull only, lasts five minutes before they try again, and is forgotten when the mission ends.
+- Squads under fire from a vehicle or a static gun alone now know where the fire is coming from: they react, take cover behind smoke and fall back away from it. Before, BBB's picture of the fight only counted enemy soldiers, so a squad hit by a BTR or a technical behaved as if there were no enemy at all.
 
 ## 0.1.7 — released
 

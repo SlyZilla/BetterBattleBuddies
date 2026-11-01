@@ -140,7 +140,8 @@ class BBB_Squad
     float age = target.GetTimeSinceDetected();
     if (age < 0 || age > MEMORY_S) continue;
     IEntity enemy = target.GetTargetEntity();
-    if (enemy && !BBB.IsAlive(enemy)) continue;
+    // Vehicles and static guns are contacts too: a squad fired on only by a BTR has a front.
+    if (enemy && !BBB.StillFighting(enemy)) continue;
     BBB_SquadContact contact;
     if (enemy) contact = byEnemy.Get(enemy);
     if (contact && contact.m_fAge <= age) continue;
@@ -157,7 +158,7 @@ class BBB_Squad
   }
   foreach (BBB_SquadContact kept : before)
   {
-   if (!kept.m_Enemy || byEnemy.Contains(kept.m_Enemy) || !BBB.IsAlive(kept.m_Enemy)) continue;
+   if (!kept.m_Enemy || byEnemy.Contains(kept.m_Enemy) || !BBB.StillFighting(kept.m_Enemy)) continue;
    kept.m_fAge = kept.m_fAge + since;
    if (kept.m_fAge > MEMORY_S) continue;
    picture.m_Contacts.Insert(kept);
