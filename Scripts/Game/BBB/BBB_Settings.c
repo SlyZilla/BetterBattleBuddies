@@ -373,6 +373,7 @@ class BBB_Settings
   g = "Movement";
   On(g, "bbbRelaxedMarch", "Relaxed march", "On ordinary travel soldiers lower their weapons (never holster them).");
   On(g, "bbbShoreRoutes", "Shore routes", "Foot routes round water keep off low shore ground.");
+  On(g, "bbbRoadExit", "Off the road in a firefight", "A soldier caught on a road in a firefight moves off it, into cover beside it or onto the verge, instead of lying down on the open road.");
 
   g = "Vanilla AI";
   Def(g, "bbbAISkill", BBB_ESettingKind.CHOICE, "0", "Skill", "The skill every AI soldier spawns with (in vanilla it changes aim). A host mod, Game Master or mission that sets a soldier's skill still wins.").Choices("0|10|20|50|70|80|100", "Mission's own|Novice|Rookie|Regular|Veteran|Expert|Perfect");
