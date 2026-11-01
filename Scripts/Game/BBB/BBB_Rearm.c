@@ -564,7 +564,7 @@ class BBB_Rearm
     CancelRearmAction(soldier);
     continue;
    }
-   if (BBB_Drag.Busy(soldier) || BBB_Medic.s_mGoingTo.Contains(soldier))
+   if (BBB_Drag.Busy(soldier) || BBB_Medic.s_mGoingTo.Contains(soldier) || BBB_Teams.Busy(soldier))
    {
     CancelRearmAction(soldier);
     continue;
@@ -614,6 +614,13 @@ class BBB_Rearm
    {
     CancelRearmAction(soldier);
     s_mNextRearmCheck.Set(soldier, nowMs + REARM_COOLDOWN_MS);
+    continue;
+   }
+   // A gunner whose assistant carries his ammunition waits for him instead of a body.
+   if (!needsAT && BBB_Teams.Supplies(soldier))
+   {
+    CancelRearmAction(soldier);
+    s_mNextRearmCheck.Set(soldier, nowMs + 3000.0);
     continue;
    }
 
