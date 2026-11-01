@@ -899,12 +899,24 @@ class BBB_VehicleHelpers : Managed
   bool hitRecently = BBB_Transport.VehicleHitRecently(vehicle, 6000);
   bool underFire = hitRecently || KnownEnemiesNear(group, vehicle.GetOrigin(), 300) > 0;
 
-  if (underFire && (!driver || !BBB.IsAlive(driver)) && speed < 2.0)
+  // No driver (killed, or a gun truck parked with only its gunner) is no reason to leave a
+  // working gun: an able gunner stays on it and only the riders get out to fight on foot. A
+  // Game Master's order keeps everyone where he put them, as for the stall bail below.
+  if (underFire && (!driver || !BBB.IsAlive(driver)) && speed < 2.0 && !BBB_OrderIntent.GameMasterOrder(group) && !s_aReplacingVehicles.Contains(vehicle))
   {
-   if (DismountGroupFromVehicle(group, vehicle, false) > 0)
+   bool gunManned = HasGunner(vehicle);
+   if (DismountGroupFromVehicle(group, vehicle, gunManned) > 0)
    {
-    PrintFormat("[BBB] DRIVE %1: driver lost under fire, crew bails out", BBB.s_Hooks.NameOf(group));
-    BBB_Think.NoteGroup(group, "Vehicle", "driver lost under fire: crew bails out");
+    if (gunManned)
+    {
+     PrintFormat("[BBB] DRIVE %1: driver lost under fire, riders get out, gunner stays", BBB.s_Hooks.NameOf(group));
+     BBB_Think.NoteGroup(group, "Vehicle", "driver lost under fire: riders get out, gunner stays");
+    }
+    else
+    {
+     PrintFormat("[BBB] DRIVE %1: driver lost under fire, crew bails out", BBB.s_Hooks.NameOf(group));
+     BBB_Think.NoteGroup(group, "Vehicle", "driver lost under fire: crew bails out");
+    }
    }
    ClearStallState(vehicle);
    return;
