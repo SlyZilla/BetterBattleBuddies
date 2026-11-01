@@ -232,6 +232,7 @@ class BBB_Tactic
   s_aVanilla.Clear();
   s_mContactLock.Clear();
   s_mStat.Clear();
+  s_fStatAt = 0; // world time starts over next mission
  }
 
  // HOLD, REORG and the contact pause keep every member from vanilla advances.
