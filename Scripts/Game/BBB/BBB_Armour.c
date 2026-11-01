@@ -26,6 +26,7 @@ class BBB_ArmourStat : Managed
  int m_iHits; // rounds that hit
  int m_iThrough;
  bool m_bUseless;
+ float m_fUselessAt; // world time the verdict was reached; it lapses after VERDICT_MS
 }
 
 // One round fired at a vehicle, from its first hit until its window closes.
@@ -63,6 +64,9 @@ class BBB_Armour
  static const float HIT_EFFECTIVE = 1.0; // health lost that counts as getting through
  static const int ROUND_MS = 250;        // a round's hits (spall, fragments, blast) land within this
  static const float SAME_ROUND_MS = 20;  // the fired prefab again after this is the next round
+ // A "useless" verdict stops the fire that could correct it, so it lapses: after this long the
+ // pair is judged afresh from new rounds (a damaged hull, a different variant, a lucky angle).
+ static const float VERDICT_MS = 300000;
  static ref array<ref BBB_ArmourRound> s_aRounds = {};
  static ref array<HitZone> s_aZones = {};
  static const float AA_THREAT_RANGE_M = 450.0;
@@ -160,6 +164,23 @@ class BBB_Armour
   if (!perceivable) return false;
   EAIUnitType type = perceivable.GetUnitType();
   return type == EAIUnitType.UnitType_VehicleMedium || type == EAIUnitType.UnitType_VehicleHeavy;
+ }
+
+ // A crewman with his head out of the hatch (or on an open mount) is outside the armour: the
+ // hull's verdict doesn't cover him, and a round that hurts him says nothing about the hull.
+ static bool Exposed(IEntity entity)
+ {
+  ChimeraCharacter character = ChimeraCharacter.Cast(entity);
+  if (!character || !character.IsInVehicle() || !character.GetCompartmentAccessComponent()) return false;
+  BaseCompartmentSlot seat = character.GetCompartmentAccessComponent().GetCompartment();
+  return seat && seat.IsOccupantTurnedOut();
+ }
+
+ // The armoured hull a target is or sits buttoned up in; null for anyone exposed.
+ static IEntity HullOf(IEntity entity)
+ {
+  if (Exposed(entity)) return null;
+  return VehicleOf(entity);
  }
 
  static IEntity VehicleOf(IEntity entity)
@@ -310,7 +331,7 @@ class BBB_Armour
  static void OnOccupantHit(IEntity occupant, notnull BaseDamageContext context)
  {
   if (!s_bLearn || !Counts(context.damageType) || !context.damageSource) return;
-  IEntity vehicle = VehicleOf(occupant);
+  IEntity vehicle = HullOf(occupant);
   if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return;
   IEntity shooter = Shooter(context);
   if (shooter == occupant || VehicleOf(shooter) == vehicle) return; // from inside it
@@ -326,29 +347,33 @@ class BBB_Armour
   bool useless = stat.m_iHits >= s_iMinHits && through < share;
   if (useless == stat.m_bUseless) return;
   stat.m_bUseless = useless;
+  if (useless) stat.m_fUselessAt = GetGame().GetWorld().GetWorldTime();
   if (useless) PrintFormat("[BBB] ARMOUR learned: %1 shrugs off %2 (%3 of %4 rounds got through)", Short(kind), Short(ammo), stat.m_iThrough, stat.m_iHits);
   else PrintFormat("[BBB] ARMOUR relearned: %1 can be hurt by %2 (%3 of %4)", Short(kind), Short(ammo), stat.m_iThrough, stat.m_iHits);
  }
 
- // Is this magazine's round known to be useless against the vehicle this target is or sits in?
+ // Is this magazine's round known to be useless against the hull this target is or sits
+ // buttoned up in? Exposed crew are never covered (see Exposed).
  static bool Useless(BaseTarget target, BaseMagazineComponent magazine)
  {
-  if (!target || !magazine || s_Stats.IsEmpty()) return false;
-  IEntity vehicle = VehicleOf(target.GetTargetEntity());
-  if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return false;
-  string kind = PrefabKey(vehicle);
-  string ammo = Round(Key(magazine.GetAmmoType(0)));
-  BBB_ArmourStat stat = s_Stats.Get(kind + "|" + ammo);
-  return stat && stat.m_bUseless;
+  if (!target) return false;
+  return UselessEntity(target.GetTargetEntity(), magazine);
  }
 
  static bool UselessEntity(IEntity targetEntity, BaseMagazineComponent magazine)
  {
   if (!targetEntity || !magazine || s_Stats.IsEmpty()) return false;
-  IEntity vehicle = VehicleOf(targetEntity);
+  IEntity vehicle = HullOf(targetEntity);
   if (!vehicle || Aircraft(vehicle) || !Armoured(vehicle)) return false;
   BBB_ArmourStat stat = s_Stats.Get(PrefabKey(vehicle) + "|" + Round(Key(magazine.GetAmmoType(0))));
-  return stat && stat.m_bUseless;
+  if (!stat || !stat.m_bUseless) return false;
+  if (GetGame().GetWorld().GetWorldTime() - stat.m_fUselessAt < VERDICT_MS) return true;
+  // Lapsed: start counting again, so a few rounds decide anew.
+  PrintFormat("[BBB] ARMOUR verdict lapsed: %1 vs %2 judged afresh", Short(PrefabKey(vehicle)), Short(Round(Key(magazine.GetAmmoType(0)))));
+  stat.m_bUseless = false;
+  stat.m_iHits = 0;
+  stat.m_iThrough = 0;
+  return false;
  }
 
  // Vanilla's target score constants (SCR_AICombatComponent.InitWeaponTargetSelector, 1.6).
@@ -647,6 +672,7 @@ class BBB_Armour
    GetGame().GetCallqueue().Remove(CloseRound); // an open round would judge a deleted vehicle as pierced
   }
   s_aRounds.Clear();
+  s_Stats.Clear(); // what this mission's soldiers learned isn't the next mission's
   foreach (BBB_AntiArmorJob job : s_aAntiArmorJobs)
    ReleaseAntiArmorJob(job);
   s_aAntiArmorJobs.Clear();
