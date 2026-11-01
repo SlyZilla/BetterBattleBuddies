@@ -168,6 +168,7 @@ class BBB_VehicleHelpers : Managed
 
  protected void OpenGatesFor(SCR_AIGroup group)
  {
+  if (!s_bDoors) return; // the "Gates and doors" switch covers gates too
   IEntity vehicle = BBB_Transport.CrewedVehicle(group);
   // The driver may already be out, walking to the gate: still open it, he gets back in.
   IEntity own = BBB.s_Hooks.OwnVehicleOf(group);
@@ -249,6 +250,7 @@ class BBB_VehicleHelpers : Managed
 
  protected void GetOffBeds(SCR_AIGroup group)
  {
+  if (!s_bUnstick) return; // the "Unstick vehicles" switch covers truck beds too
   array<AIAgent> agents = {};
   BBB.s_Hooks.GetMembers(group, agents);
   foreach (AIAgent agent : agents)
@@ -302,6 +304,8 @@ class BBB_VehicleHelpers : Managed
    }
   }
   if (!vehicle || handledVehicles.Contains(vehicle) || BBB.s_Hooks.LeaveAlone(vehicle)) return;
+  ChimeraCharacter driver = BBB.DriverOf(vehicle);
+  if (driver && BBB.PlayerOf(driver)) return; // a player's vehicle (AI riding with him): his doors
   handledVehicles.Insert(vehicle);
   CloseVehicleDoors(vehicle);
  }
@@ -832,6 +836,10 @@ class BBB_VehicleHelpers : Managed
   }
   if (!vehicle || BBB.s_Hooks.LeaveAlone(vehicle)) return;
   if (!CarControllerComponent.Cast(vehicle.FindComponent(CarControllerComponent))) return;
+  // A player drives: he decides where his passengers get out (BBB would also strike his
+  // vehicle off their usable list, so they wouldn't board it again).
+  ChimeraCharacter playerDriver = BBB.DriverOf(vehicle);
+  if (playerDriver && BBB.PlayerOf(playerDriver)) return;
   // A Game Master's order has primacy (Jacob, 31 Oct): he sent them driving, they stay aboard.
   if (BBB_OrderIntent.GameMasterOrder(group)) return;
 

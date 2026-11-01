@@ -56,11 +56,20 @@ class BBB_Unstick : Managed
   if (input && input.GetVehicleHorn() != 0) input.SetVehicleHorn(0);
  }
 
- // Drop a manoeuvre without finishing it (its owner is gone).
+ // Drop a manoeuvre without telling its owner (it is gone). Inputs are still released and a
+ // parked driver gets his AI back: dropping it bare left him frozen in his seat for good.
  static void Cancel(BBB_UnstickListener listener)
  {
   for (int i = s_Active.Count() - 1; i >= 0; i--)
-   if (s_Active[i].m_Listener == listener) s_Active.RemoveOrdered(i);
+  {
+   BBB_Unstick unstick = s_Active[i];
+   if (unstick.m_Listener != listener) continue;
+   unstick.m_Listener = null;
+   CarControllerComponent car;
+   if (unstick.m_Vehicle) car = CarControllerComponent.Cast(unstick.m_Vehicle.FindComponent(CarControllerComponent));
+   unstick.End(car);
+   s_Active.RemoveOrdered(i);
+  }
  }
 
  // BBB is stopping: finish every manoeuvre (inputs released, parked AI handed back), tell no one.
@@ -87,7 +96,9 @@ class BBB_Unstick : Managed
  {
   float elapsed = GetGame().GetWorld().GetWorldTime() - m_fStart;
   IEntity vehicle = m_Vehicle;
-  bool alive = vehicle != null && m_Driver != null && BBB.IsAlive(m_Driver) && BBB_Transport.VehicleOf(m_Driver) == vehicle;
+  // A player who takes the driver over (a Game Master possessing him) or a driver who changed
+  // seats ends it: inputs written every frame would steer the car under the player.
+  bool alive = vehicle != null && m_Driver != null && BBB.IsAlive(m_Driver) && BBB_Transport.VehicleOf(m_Driver) == vehicle && !BBB.PlayerOf(m_Driver) && BBB.DriverOf(vehicle) == m_Driver;
   CarControllerComponent car;
   if (alive) car = CarControllerComponent.Cast(vehicle.FindComponent(CarControllerComponent));
   if (!car || !car.GetSimulation() || elapsed > TOTAL_MS)
