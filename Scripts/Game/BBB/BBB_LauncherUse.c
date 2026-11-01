@@ -6,8 +6,12 @@
 // 1. On infantry (-bbbLauncherInfantry): on his own due weapon pick, after vanilla chose an
 //    infantry target he can see, BBB may hand him his launcher:
 //    - anti-personnel round (HE, frag, thermobaric, incendiary, dual-purpose HEDP): at a group
-//      (another known enemy within 7 m of the target), a man partly behind cover, a man in a building;
-//    - anti-armour round (HEAT, AP, any disposable tube): only at a man in a building.
+//      (another known enemy within 7 m of the target), a man partly behind cover, a man in a building
+//      or dug in;
+//    - anti-armour round (HEAT, AP, any disposable tube): only at a man in a building or dug in
+//      (-bbbLauncherDugIn): thick hard cover (a trench wall, sandbags, masonry) within 3 m in front
+//      of him hides his lower body from the shooter, so a round bursting on it still reaches him.
+//      A fence, a hedge, a tree or a fold in the ground doesn't count.
 //    Never: while enemy armour is known to him (last 90 s), closer than 35 m (anti-armour 25 m) or
 //    farther than 300 m (disposables 200 m), with a friend within 12 m of the target, in HOLD FIRE,
 //    in a vehicle, under a forced player/GM move, while BBB has him on another job (role claims) or
@@ -28,6 +32,7 @@ class BBB_LauncherUse
  static bool s_bOn = true;
  static bool s_bSwap = true;
  static bool s_bCombatLoad = true;
+ static bool s_bDugIn = true;
  static const float AP_MIN_M = 35;
  static const float AT_MIN_M = 25;
  static const float MAX_M = 300;
@@ -42,6 +47,10 @@ class BBB_LauncherUse
  static const float SWAP_HOLD_MS = 25000;
  static const float PAUSE_MS = 20000;
  static const float CHECK_MS = 1500;
+ static const float DUG_IN_LOW_M = 0.4;   // the point on him the cover must hide, above his feet
+ static const float DUG_IN_GAP_M = 3;     // cover face to him
+ static const float DUG_IN_THICK_M = 0.25; // sandbags, earth, brick; not planks or sheet metal
+ static const float DUG_IN_SKIP_M = 2;    // the shooter's own cover doesn't count
  static const int NONE = 0;
  static const int ANTI_PERSONNEL = 1;
  static const int ANTI_ARMOUR = 2;
@@ -51,6 +60,7 @@ class BBB_LauncherUse
  static int s_iSwapped;
  static int s_iArmourSwaps;
  static int s_iUnloaded;
+ static int s_iDugIn;
  static bool s_bTrace; // test only: print why each hold ends
  static bool s_bTestNoSettle; // test only: leave tubes loaded (swap fixture)
  static ref map<string, int> s_mClass = new map<string, int>();
@@ -62,7 +72,8 @@ class BBB_LauncherUse
   s_bOn = !(BBB_Settings.Get("bbbLauncherInfantry", value) && value == "0");
   s_bSwap = !(BBB_Settings.Get("bbbLauncherSwap", value) && value == "0");
   s_bCombatLoad = !(BBB_Settings.Get("bbbLauncherCombatLoad", value) && value == "0");
-  PrintFormat("[BBB] LAUNCHERS on infantry=%1 swap=%2 combatLoad=%3", s_bOn, s_bSwap, s_bCombatLoad);
+  s_bDugIn = !(BBB_Settings.Get("bbbLauncherDugIn", value) && value == "0");
+  PrintFormat("[BBB] LAUNCHERS on infantry=%1 swap=%2 combatLoad=%3 dugIn=%4", s_bOn, s_bSwap, s_bCombatLoad, s_bDugIn);
  }
 
  static void Stop()
@@ -192,14 +203,61 @@ class BBB_LauncherUse
  }
 
  // Why this target is worth a round of this kind ("" if it isn't).
- static string Reason(PerceptionComponent perception, BaseTarget target, int kind)
+ static string Reason(IEntity shooter, PerceptionComponent perception, BaseTarget target, int kind)
  {
   IEntity entity = target.GetTargetEntity();
   if (entity && BBB_Buildings.RoofAt(entity.GetOrigin())) return "a man in a building";
+  if (s_bDugIn && DugIn(shooter, entity)) return "a man dug in";
   if (kind != ANTI_PERSONNEL) return "";
   if (Grouped(perception, target)) return "a group";
   if (target.GetTraceFraction() < 0.9) return "a man behind cover";
   return "";
+ }
+
+ // Thick hard cover just in front of the man hides his lower body from the shooter: the line
+ // from the shooter's eye to a point low on him first meets something solid within 3 m of him, at
+ // least 0.25 m deep along that line (traced from both sides). Not terrain, trees, vehicles or men.
+ static bool DugIn(IEntity shooter, IEntity man)
+ {
+  ChimeraCharacter character = ChimeraCharacter.Cast(shooter);
+  if (!character || !man) return false;
+  return DugInAt(character.EyePosition(), man.GetOrigin(), shooter, man);
+ }
+
+ // The same for a man standing at feet (man may be null: tests probe empty ground with it).
+ static bool DugInAt(vector eye, vector feet, IEntity shooter, IEntity man)
+ {
+  vector low = feet + Vector(0, DUG_IN_LOW_M, 0);
+  float length = vector.Distance(eye, low);
+  if (length <= DUG_IN_SKIP_M + DUG_IN_GAP_M) return false;
+  vector dir = (low - eye) / length;
+  vector start = eye + dir * DUG_IN_SKIP_M;
+  TraceParam front = new TraceParam();
+  front.Start = start;
+  front.End = low;
+  front.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+  front.LayerMask = EPhysicsLayerPresets.Projectile;
+  front.Exclude = shooter;
+  float hitAt = GetGame().GetWorld().TraceMove(front, null);
+  if (hitAt >= 1) return false;
+  IEntity hit = front.TraceEnt;
+  if (!hit) return false;
+  IEntity root = hit.GetRootParent();
+  if ((man && root == man) || GenericTerrainEntity.Cast(hit) || Tree.Cast(hit) || ChimeraCharacter.Cast(root) || Vehicle.Cast(root)) return false;
+  vector face = start + (low - start) * hitAt;
+  if (vector.Distance(face, low) > DUG_IN_GAP_M) return false;
+  TraceParam back = new TraceParam();
+  back.Start = low;
+  back.End = face;
+  back.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+  back.LayerMask = EPhysicsLayerPresets.Projectile;
+  if (man) back.Exclude = man;
+  float backAt = GetGame().GetWorld().TraceMove(back, null);
+  if (backAt >= 1) return false;
+  vector rear = low + (face - low) * backAt;
+  float thick = vector.Distance(face, rear);
+  if (s_bTrace && thick >= DUG_IN_THICK_M) PrintFormat("[BBB] LAUNCHTRACE dug in: %1 (%2), %3 m in front, %4 m deep", hit.ClassName(), BBB_Launchers.WeaponName(root), vector.Distance(face, low), thick);
+  return thick >= DUG_IN_THICK_M;
  }
 
  // Loaded in contact: out of contact, a gunner with both kinds of round empties his tube into
@@ -451,14 +509,14 @@ modded class SCR_AICombatComponent
   int kind = BBB_LauncherUse.ClassOf(round);
   if (kind == BBB_LauncherUse.NONE) return false;
   if (disposable) kind = BBB_LauncherUse.ANTI_ARMOUR;
-  string reason = BBB_LauncherUse.Reason(m_Perception, target, kind);
+  string reason = BBB_LauncherUse.Reason(owner, m_Perception, target, kind);
   if (reason.IsEmpty() && kind == BBB_LauncherUse.ANTI_ARMOUR && !disposable && BBB_LauncherUse.s_bSwap && BBB_LauncherUse.InTube(launcher) == round
    && distance >= BBB_LauncherUse.SWAP_MIN_M && m_Utility.m_ThreatSystem && m_Utility.m_ThreatSystem.GetThreatMeasure() < BBB_LauncherUse.SWAP_MAX_THREAT)
   {
    BaseMagazineComponent better = BBB_LauncherUse.Spare(owner, launcher, BBB_LauncherUse.ANTI_PERSONNEL);
    if (better)
    {
-    reason = BBB_LauncherUse.Reason(m_Perception, target, BBB_LauncherUse.ANTI_PERSONNEL);
+    reason = BBB_LauncherUse.Reason(owner, m_Perception, target, BBB_LauncherUse.ANTI_PERSONNEL);
     if (!reason.IsEmpty()) { round = better; kind = BBB_LauncherUse.ANTI_PERSONNEL; swap = true; }
    }
   }
@@ -481,6 +539,7 @@ modded class SCR_AICombatComponent
   m_fBBBLaunchUntil = now + BBB_LauncherUse.HOLD_MS;
   if (swap || BBB_LauncherUse.InTube(launcher) != round) m_fBBBLaunchUntil = now + BBB_LauncherUse.SWAP_HOLD_MS;
   BBB_LauncherUse.s_iPicked++;
+  if (reason == "a man dug in") BBB_LauncherUse.s_iDugIn++;
   if (swap) BBB_LauncherUse.s_iSwapped++;
   BBB_Perf.Count("launcher.picked");
   string action = "fires his ";

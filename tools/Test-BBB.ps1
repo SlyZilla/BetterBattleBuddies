@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','gatelane','contactrelay','claims','squad','tactic','assault','coverfire','flank','search','heldguns','vanillanodes','indoorhold','roadexit','roadexitiso','roadexiton','roadexitnear','armourrounds','launcherinf','launcherinfrhs','settings','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','gatelane','contactrelay','claims','teams','squad','tactic','assault','coverfire','flank','search','heldguns','vanillanodes','indoorhold','roadexit','roadexitiso','roadexiton','roadexitnear','armourrounds','launcherinf','launcherinfrhs','settings','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath,
  [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120,
@@ -93,6 +93,8 @@ $timeouts.gatelane = 90
 $flags.contactrelay = '-bbbContactRelayTest 1 -bbbPerf 1'
 $timeouts.contactrelay = 230
 $flags.claims = '-bbbClaimsTest 1 -bbbPerf 1'
+$flags.teams = '-bbbTeamsTest 1 -bbbPerf 1'
+$timeouts.teams = 200
 $timeouts.claims = 150
 $flags.squad = '-bbbSquadTest 1 -bbbPerf 1'
 $timeouts.squad = 200

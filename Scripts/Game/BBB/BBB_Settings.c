@@ -345,6 +345,7 @@ class BBB_Settings
   On(g, "bbbMedicSmoke", "Smoke before aid", "Smoke goes out toward the threat before anyone moves to an exposed casualty.");
   On(g, "bbbDrag", "Casualty drags", "Casualties in the open are dragged to cover.");
   On(g, "bbbRearm", "Rearm from the fallen", "Soldiers low on ammo take magazines and launchers from nearby friendly bodies, even mid-fight.");
+  On(g, "bbbSpecialistTeams", "Specialist teams", "Machine gunners and AT gunners keep the assistant who carries their ammunition close; he hands over ammo before the gun runs dry and takes the launcher if the gunner falls.");
   Num(g, "bbbRearmRadius", 25, 5, 100, 1, "Rearm search radius (m)", "How far a soldier goes for ammo.");
 
   g = "Static weapons";
