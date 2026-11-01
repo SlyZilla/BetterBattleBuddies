@@ -1,18 +1,24 @@
 // Do AI soldiers fire AT launchers at infantry? (BBB #14) -bbbLauncherInfantryTest 1
 // (Test-BBB.ps1 -Preset launcherinf; -Preset launcherinfrhs also loads RHS: Status Quo and
 // passes -bbbLauncherInfantryRhs 1, which makes the RHS cases required).
-// Two launcher men on the aim lane, 150 m from an enemy rifle team in the open, or (control:
+// Two launcher men on the aim lane, 150 m (90-150 m: the nearest-to-150 spot where nothing on the
+// map reads as cover by BBB_LauncherUse.DugInAt) from an enemy rifle team in the open, held where
+// it stands, or (control:
 // the set-up lets them fire their launchers at all) an enemy vehicle with only a hold-fire
 // driver aboard. Shooters and the rifle team can't be hurt, so every round runs its full
 // length. RHS soldiers are put in the vanilla US/USSR factions for the round.
-// Cases: vanilla USSR AT (RPG-7, PG-7VM) v US team, and v an M151A2 (control);
+// Cases: vanilla USSR AT (RPG-7, PG-7VM) v US team, v the team dug in behind sandbags (each man
+//        held in place behind a short sandbag wall 1.2 m in front of him), and v an M151A2 (control);
 //        RHS USMC AT (SMAW, HEDP loaded) v USSR team, and v a BTR-70 (control);
 //        RHS RF SOF AT (RPO-A) v US team; RHS RF SOF AAT (RPO-D smoke) v US team.
 // Per round: launcher rounds fired, split by what the shooter was targeting at the time;
 // sampled picks (launcher or another weapon, at infantry or a vehicle); the rounds the AI
 // had selected; rifle shots. Logs "[BBB] LAUNCHTEST ...".
 // Expectations (BBB_LauncherUse, BBB #14), with -bbbLauncherInfantry 1 (default) / 0:
-//  RPG-7 PG-7VM (HEAT) v the team in the open: 0 rockets either way (HEAT only at men in buildings);
+//  RPG-7 PG-7VM (HEAT) v the team in the open: 0 rockets either way (HEAT only at men in buildings
+//  or dug in); v the team dug in: at least 1 rocket at infantry with -bbbLauncherInfantry and
+//  -bbbLauncherDugIn on, 0 with either off; the fixture must read as dug in (BBB_LauncherUse.DugIn)
+//  from a shooter at some sample, or the case says nothing;
 //  SMAW HEDP v the team: at least 1 rocket at infantry when on, 0 when off (vanilla);
 //  RPO-A v the team: at least 1 either way (vanilla already allows it); controls: 1+ at the vehicle.
 //  RPO-D smoke is recorded only (vanilla fires it at people; BBB never picks smoke).
@@ -20,7 +26,8 @@
 //  (each man carries one HEAA; HEDP after it is all he has left).
 //  Loaded in contact (-bbbLauncherCombatLoad): a SMAW pair alone for 20 s must end with empty tubes
 //  and every rocket still carried; then the enemy team appears and at least 1 rocket hits the air.
-// What it does not establish: infantry in cover or in buildings, HEAT at a building, an
+// What it does not establish: infantry in buildings, HEAT at a building, real trenches (prefabs
+// differ), cover the rule should refuse (fences, hedges) with a man visible behind it, an
 // RPG-7 with an OG-7V/TBG-7V loaded (no soldier carries one), other ranges.
 // A round that left a tube: a shot, or a swap's ejected round on its way back into the kit.
 class BBB_LaunchLeft
@@ -53,9 +60,14 @@ class BBB_LauncherInfantryTest : BBB_AimTest
  protected ref array<bool> m_aShooterUS = {};
  protected ref array<ResourceName> m_aVehicle = {};
  protected ref array<bool> m_aFromRhs = {};
- // Rockets expected at infantry: -1 not checked, 0 none, 1 at least one, 2 at least one with BBB's rule on.
+ // Rockets expected at infantry: -1 not checked, 0 none, 1 at least one, 2 at least one with BBB's rule on,
+ // 3 at least one with the rule and its dug-in part on.
  protected ref array<int> m_aExpect = {};
  protected ref array<float> m_aDelay = {};
+ protected ref array<bool> m_aDugIn = {};
+ protected int m_iDugInSeen;
+ protected int m_iDugInSamples;
+ static const ResourceName SANDBAG = "{5EF52FAE299A831A}Prefabs/Props/Military/Sandbags/Sandbag_01_short_base.et";
  protected float m_fEnemyAt;
  protected int m_iRocketsAtStart;
  protected int m_iRocketsAll;
@@ -92,8 +104,9 @@ class BBB_LauncherInfantryTest : BBB_AimTest
   GetGame().GetCallqueue().CallLater(s_Launch.Begin, 10000);
  }
 
- protected void Case(string name, ResourceName shooter, bool shooterUS, ResourceName vehicle, bool fromRhs, int expect, float delay = 0)
+ protected void Case(string name, ResourceName shooter, bool shooterUS, ResourceName vehicle, bool fromRhs, int expect, float delay = 0, bool dugIn = false)
  {
+  m_aDugIn.Insert(dugIn);
   m_aDelay.Insert(delay);
   m_aExpect.Insert(expect);
   m_aName.Insert(name);
@@ -127,6 +140,7 @@ class BBB_LauncherInfantryTest : BBB_AimTest
    observers.InsertObserverSP(OBSERVER_KEY, mid[0], mid[2], null);
   }
   Case("vanilla RPG-7 (PG-7VM) v infantry", AT_USSR, false, "", false, 0);
+  Case("vanilla RPG-7 (PG-7VM) v infantry dug in", AT_USSR, false, "", false, 3, 0, true);
   Case("vanilla RPG-7 (PG-7VM) v M151A2 (control)", AT_USSR, false, JEEP, false, -1);
   Case("RHS SMAW (HEDP) v infantry", AT_USMC, true, "", true, 2);
   Case("RHS SMAW (HEDP) v BTR-70 (control)", AT_USMC, true, BTR, true, -1);
@@ -202,6 +216,7 @@ class BBB_LauncherInfantryTest : BBB_AimTest
    enemyMan = RIFLE_USSR;
    enemyGroup = GROUP_USSR;
   }
+  ResourceName vehicle = m_aVehicle[round];
   SCR_AIGroup team = EmptyGroup(shooterGroup, m_aShooter[round], 2, lane.m_vFrom, lane.m_vDir, lane);
   vector side = Vector(lane.m_vDir[2], 0, -lane.m_vDir[0]);
   for (int i = 0; i < 2 && team; i++)
@@ -213,8 +228,8 @@ class BBB_LauncherInfantryTest : BBB_AimTest
    team.AddAIEntityToGroup(man);
   }
   lane.m_A.m_Group = team;
+  if (vehicle.IsEmpty()) lane.m_vTo = OpenEnd(lane);
   m_Vehicle = null;
-  ResourceName vehicle = m_aVehicle[round];
   m_fEnemyAt = 0;
   m_sEnemyTeam = enemyTeam;
   if (vehicle.IsEmpty() && m_aDelay[round] > 0) m_fEnemyAt = Now() + m_aDelay[round];
@@ -265,6 +280,8 @@ class BBB_LauncherInfantryTest : BBB_AimTest
   m_sRounds = "";
   m_fNextSample = Now() + 6;
   m_iRocketsAtStart = -1;
+  m_iDugInSeen = 0;
+  m_iDugInSamples = 0;
   if (m_aFromRhs[round]) m_iRhsRun++;
   PrintFormat("[BBB] LAUNCHTEST round %1/%2: %3 at %4 m", round + 1, m_aName.Count(), m_aName[round], RANGE_M);
   return true;
@@ -469,6 +486,8 @@ class BBB_LauncherInfantryTest : BBB_AimTest
     {
      Hook(lane.m_B, false);
      Invulnerable(lane.m_B);
+     Hold(lane.m_B);
+     if (m_aDugIn[m_iCase]) DigIn(lane);
     }
     if (m_Vehicle)
     {
@@ -497,6 +516,7 @@ class BBB_LauncherInfantryTest : BBB_AimTest
     m_fHookTargetsAt = 0;
     Hook(lane.m_B, false);
     Invulnerable(lane.m_B);
+    Hold(lane.m_B);
    }
    lane.m_A.SampleAmmo();
    WatchLaunchers(lane.m_A);
@@ -505,9 +525,78 @@ class BBB_LauncherInfantryTest : BBB_AimTest
   if (now >= m_fNextSample)
   {
    m_fNextSample = now + 2;
-   foreach (BBB_AimLane sampled : m_aLanes) SamplePicks(sampled.m_A);
+   foreach (BBB_AimLane sampled : m_aLanes)
+   {
+    SamplePicks(sampled.m_A);
+    SampleDugIn(sampled);
+   }
   }
   if (now >= m_fRoundEnd) EndRound();
+ }
+
+ // The enemy end of the lane: from 150 m in, 10 m at a time, the first spot where neither it nor
+ // ground 5 m round it reads as cover from the shooters' end (map props sit on some lanes: an
+ // airfield pipeline did on Arland's, and the team behind it counted as dug in).
+ protected vector OpenEnd(BBB_AimLane lane)
+ {
+  vector eye = lane.m_vFrom + Vector(0, 1.6, 0);
+  vector side = Vector(lane.m_vDir[2], 0, -lane.m_vDir[0]);
+  array<vector> around = {vector.Zero, side * 5, side * -5, lane.m_vDir * 5, lane.m_vDir * -5};
+  for (int step = 0; step <= 6; step++)
+  {
+   vector at = lane.m_vFrom + lane.m_vDir * (RANGE_M - step * 10);
+   bool open = true;
+   foreach (vector offset : around)
+   {
+    if (BBB_LauncherUse.DugInAt(eye, BBB.Ground(at + offset), null, null)) { open = false; break; }
+   }
+   if (!open) continue;
+   PrintFormat("[BBB] LAUNCHTEST enemy end at %1 m (open ground)", RANGE_M - step * 10);
+   return at;
+  }
+  PrintFormat("[BBB] LAUNCHTEST no open ground 90-150 m; enemy end at %1 m", RANGE_M);
+  return lane.m_vTo;
+ }
+
+ // Enemy men stay where they are (they still turn, crouch and go prone).
+ protected void Hold(BBB_AimSide side)
+ {
+  foreach (IEntity man : side.m_aMen)
+  {
+   ChimeraCharacter character = ChimeraCharacter.Cast(man);
+   if (character && character.GetCharacterController()) character.GetCharacterController().OverrideMaxSpeed(0);
+  }
+ }
+
+ // Each enemy man behind a short sandbag wall 1.2 m towards the shooters.
+ protected void DigIn(BBB_AimLane lane)
+ {
+  foreach (IEntity man : lane.m_B.m_aMen)
+  {
+   if (!man) continue;
+   IEntity bag = Spawn(SANDBAG, BBB.Ground(man.GetOrigin() - lane.m_vDir * 1.2), lane.m_vDir);
+   if (!bag) continue;
+   lane.m_aSpawned.Insert(bag);
+   vector mins, maxs;
+   bag.GetBounds(mins, maxs);
+   PrintFormat("[BBB] LAUNCHTEST sandbag at %1, bounds %2 .. %3", bag.GetOrigin(), mins, maxs);
+  }
+ }
+
+ // How often an enemy man reads as dug in from a shooter (the rule's own test, so the fixture
+ // is known to be what the case claims).
+ protected void SampleDugIn(BBB_AimLane lane)
+ {
+  foreach (IEntity shooter : lane.m_A.m_aMen)
+  {
+   if (!shooter) continue;
+   foreach (IEntity man : lane.m_B.m_aMen)
+   {
+    if (!man) continue;
+    m_iDugInSamples++;
+    if (BBB_LauncherUse.DugIn(shooter, man)) m_iDugInSeen++;
+   }
+  }
  }
 
  override protected void EndRound()
@@ -537,6 +626,14 @@ class BBB_LauncherInfantryTest : BBB_AimTest
    if (m_aVehicle[m_iCase] == BTR && BBB_LauncherUse.s_bSwap) Assert("armour-gets-antiarmour-round-" + m_iCase, !m_aFired.IsEmpty() && m_aFired[0].Contains("HEAA"), fired);
    int expect = m_aExpect[m_iCase];
    if (expect == 2 && !BBB_LauncherUse.s_bOn) expect = 0;
+   if (expect == 3 && (!BBB_LauncherUse.s_bOn || !BBB_LauncherUse.s_bDugIn)) expect = 0;
+   PrintFormat("[BBB] LAUNCHTEST dug-in samples %1 of %2", m_iDugInSeen, m_iDugInSamples);
+   // A case in the open says nothing if the men were behind cover after all.
+   if (m_aExpect[m_iCase] == 0) Assert("fixture-open-" + m_iCase, m_iDugInSeen == 0, string.Format("%1 of %2 samples read as dug in", m_iDugInSeen, m_iDugInSamples));
+   if (m_aDugIn[m_iCase])
+   {
+    Assert("fixture-dug-in-" + m_iCase, m_iDugInSeen > 0, string.Format("%1 of %2 samples", m_iDugInSeen, m_iDugInSamples));
+   }
    if (expect == 0) Assert("no-rockets-at-infantry-" + m_iCase, m_iAtInfantry == 0, name);
    if (expect >= 1) Assert("rockets-at-infantry-" + m_iCase, m_iAtInfantry > 0, name);
    Clear(lane);
@@ -552,6 +649,7 @@ class BBB_LauncherInfantryTest : BBB_AimTest
   if (observers) observers.RemoveObserverSP(OBSERVER_KEY);
   BBB_LauncherUse.Read();
   PrintFormat("[BBB] LAUNCHTEST BBB on infantry=%1 swap=%2 combatLoad=%3: picks %4, rockets fired %5 (anti-personnel %6), swaps %7, armour swaps %8, unloaded %9", BBB_LauncherUse.s_bOn, BBB_LauncherUse.s_bSwap, BBB_LauncherUse.s_bCombatLoad, BBB_LauncherUse.s_iPicked, BBB_LauncherUse.s_iFired, BBB_LauncherUse.s_iFiredAP, BBB_LauncherUse.s_iSwapped, BBB_LauncherUse.s_iArmourSwaps, BBB_LauncherUse.s_iUnloaded);
+  PrintFormat("[BBB] LAUNCHTEST dugIn=%1: picks for a man dug in %2", BBB_LauncherUse.s_bDugIn, BBB_LauncherUse.s_iDugIn);
   if (s_bRhs) Assert("rhs-cases-ran", m_iRhsRun == 5, string.Format("%1 of 5", m_iRhsRun));
   string verdict = "PASS";
   if (m_iFailures > 0 || m_iChecks < 5) verdict = "FAIL";
