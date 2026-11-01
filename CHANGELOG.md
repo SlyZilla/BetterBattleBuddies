@@ -32,6 +32,11 @@
 - Squads searching for a lost enemy check the spots nearest where he was last seen first, instead of jumping to the farthest one after the first.
 - Player-led squads keep the game's own illumination flares at night; BBB had switched them off without firing its own.
 - Without a host mod and with `-bbbVanilla 0`, medic and casualty-drag state is cleared between missions, so medics keep watching their casualties in the next mission.
+- Vehicle gunners stop their bursts at a heard threat as soon as their squad is told to hold fire, and a frag that hasn't left the hand yet is put away on hold fire or a new order.
+- Soldiers no longer throw a frag when a player or a soldier from another friendly squad stands between them and the target (before, only their own squad was checked).
+- A launcher gunner who picked a rocket for an enemy soldier holds it if, while he reloads, the man gets too close or friendlies move in on him.
+- AI in a player's squad are no longer thrown to the ground by BBB's explosion and armour reflexes; the player's squad is left to the player.
+- A driver killed while BBB was lining his vehicle up for the gunner no longer has his AI switched back on.
 
 ## 0.1.7 — released
 
