@@ -1,7 +1,7 @@
 # Independent BBB acceptance runner. Loads BBB + base game, never ACA.
 [CmdletBinding()]
 param(
- [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','gatelane','contactrelay','claims','squad','tactic','assault','coverfire','flank','search','heldguns','vanillanodes','indoorhold','armourrounds','launcherinf','launcherinfrhs','settings','compile')][string]$Preset = 'vanilla',
+ [ValidateSet('vanilla','rearm','seatdiag','seatfire','seatidle','look','firemaneuverperf','morale','smoke','staticweapons','grenades','featureaudit','reactions','crewturnout','driveralign','driveraligncomplete','commanderseat','think','flares','doors','orderleash','crewstays','gatelane','contactrelay','claims','teams','squad','tactic','assault','coverfire','flank','search','heldguns','vanillanodes','indoorhold','roadexit','roadexitiso','roadexiton','roadexitnear','armourrounds','launcherinf','launcherinfrhs','settings','compile')][string]$Preset = 'vanilla',
  [string]$AddonRoot,
  [string]$ServerPath,
  [ValidateRange(0,1200)][int]$WaitForServerSeconds = 120,
@@ -93,6 +93,8 @@ $timeouts.gatelane = 90
 $flags.contactrelay = '-bbbContactRelayTest 1 -bbbPerf 1'
 $timeouts.contactrelay = 230
 $flags.claims = '-bbbClaimsTest 1 -bbbPerf 1'
+$flags.teams = '-bbbTeamsTest 1 -bbbPerf 1'
+$timeouts.teams = 200
 $timeouts.claims = 150
 $flags.squad = '-bbbSquadTest 1 -bbbPerf 1'
 $timeouts.squad = 200
@@ -112,6 +114,14 @@ $flags.vanillanodes = '-bbbVanillaNodesTest 1'
 $timeouts.vanillanodes = 150
 $flags.indoorhold = '-bbbIndoorHoldTest 1 -bbbPerf 1'
 $timeouts.indoorhold = 200
+$flags.roadexit = '-bbbRoadExitTest 1 -bbbPerf 1'
+$timeouts.roadexit = 220
+$flags.roadexitiso = '-bbbRoadExitTest 1 -bbbRoadExitIsolate 1 -bbbPerf 1'
+$timeouts.roadexitiso = 220
+$flags.roadexiton = '-bbbRoadExitTest 1 -bbbRoadExitOnFirst 1 -bbbPerf 1'
+$timeouts.roadexiton = 220
+$flags.roadexitnear = '-bbbRoadExitTest 1 -bbbRoadExitNear 1 -bbbPerf 1'
+$timeouts.roadexitnear = 220
 $flags.armourrounds = '-bbbArmourRoundsTest 1'
 $timeouts.armourrounds = 150
 $flags.settings = '-bbbSettingsTest 1 -bbbStaticArc 120'

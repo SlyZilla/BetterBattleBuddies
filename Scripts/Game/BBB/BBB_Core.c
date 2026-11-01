@@ -121,10 +121,12 @@ class BBB
   BBB_Buildings.Read();
   BBB_ArmorReaction.Read();
   BBB_ExposedFire.Read();
+  BBB_RoadExit.Read();
   BBB_Think.Read();
   BBB_DoorUnstick.Read();
   BBB_ContactRelay.Read();
   BBB_Claims.Read();
+  BBB_Teams.Read();
   BBB_Squad.Read();
   BBB_Tactic.Read();
   BBB_CoverFire.Read();
@@ -165,6 +167,7 @@ class BBB
   BBB_ContactRelay.Stop();
   BBB_OrderLeash.Stop();
   BBB_Claims.Stop();
+  BBB_Teams.Stop();
   BBB_Squad.Stop();
   BBB_Tactic.Stop();
   BBB_Transport.ClearHits();
@@ -198,6 +201,8 @@ class BBB
 		t = BBB_Perf.Lap("tick.launchers", t);
 		if (s_Combat) s_Combat.Tick();
 		t = BBB_Perf.Lap("tick.combat", t);
+  BBB_Teams.Tick();
+  t = BBB_Perf.Lap("tick.teams", t);
 		array<SCR_AIGroup> rearmGroups = {};
 		s_Hooks.GetGroups(rearmGroups);
 		BBB_Rearm.WatchTrips(rearmGroups);
@@ -267,6 +272,15 @@ class BBB
  {
   ChimeraCharacter character = ChimeraCharacter.Cast(entity);
   return character && character.GetCharacterController() && !character.GetCharacterController().IsDead();
+ }
+
+ // A perceived enemy still in the fight: a living soldier, or a vehicle or static gun that isn't
+ // destroyed (IsAlive is false for anything that isn't a soldier).
+ static bool StillFighting(IEntity entity)
+ {
+  if (!entity) return false;
+  if (ChimeraCharacter.Cast(entity)) return IsAlive(entity);
+  return Health(entity) > 0;
  }
 
  // Alive and awake: a downed soldier can't lead, walk or regroup.
