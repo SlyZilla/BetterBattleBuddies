@@ -108,15 +108,7 @@ class BBB_Rearm
   Faction soldierFac = group.GetFaction();
   foreach (IEntity target : groupUtil.m_Perception.m_aTargetEntities)
   {
-   if (!target) continue;
-   if (target.IsInherited(ChimeraCharacter))
-   {
-    if (!BBB.IsAlive(target)) continue;
-   }
-   else if (BBB.Health(target) <= 0)
-   {
-    continue;
-   }
+   if (!BBB.StillFighting(target)) continue;
    Faction targetFac = null;
    FactionAffiliationComponent aff = FactionAffiliationComponent.Cast(target.FindComponent(FactionAffiliationComponent));
    if (aff) targetFac = aff.GetAffiliatedFaction();

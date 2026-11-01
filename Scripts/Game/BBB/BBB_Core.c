@@ -269,6 +269,15 @@ class BBB
   return character && character.GetCharacterController() && !character.GetCharacterController().IsDead();
  }
 
+ // A perceived enemy still in the fight: a living soldier, or a vehicle or static gun that isn't
+ // destroyed (IsAlive is false for anything that isn't a soldier).
+ static bool StillFighting(IEntity entity)
+ {
+  if (!entity) return false;
+  if (ChimeraCharacter.Cast(entity)) return IsAlive(entity);
+  return Health(entity) > 0;
+ }
+
  // Alive and awake: a downed soldier can't lead, walk or regroup.
  static bool IsConscious(IEntity entity)
  {
