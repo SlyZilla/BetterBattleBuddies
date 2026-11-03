@@ -392,6 +392,9 @@ class BBB_Settings
   On(g, "bbbTacticalDismount", "Dismount under fire", "Passengers of a vehicle slowing under fire get out to fight; turret crews stay.");
   On(g, "bbbDoors", "Gates and doors", "AI drivers open gates ahead without stopping; crews close doors and hatches once aboard.");
   On(g, "bbbUnstick", "Unstick vehicles", "Stuck AI drivers reverse and steer away; soldiers left standing on a truck bed get down.");
+  Off(g, "bbbGiveWay", "Vehicles give way", "Friendly vehicles on a collision course agree who gives way: head-on, one pulls over to its right and waits; anywhere else it brakes. Never for an enemy.");
+  Off(g, "bbbHandbrake", "Handbrake when the driver leaves", "A vehicle its AI driver has left gets its handbrake on (sometimes forgotten under fire).");
+  Off(g, "bbbEvadeArmour", "Unarmed vehicles get away from armed enemies", "An unarmed vehicle whose crew sees an armed enemy vehicle asks the mission to drive it away.");
 
   g = "Movement";
   On(g, "bbbRelaxedMarch", "Relaxed march", "On ordinary travel soldiers lower their weapons (never holster them).");
