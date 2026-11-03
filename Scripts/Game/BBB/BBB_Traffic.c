@@ -134,6 +134,7 @@ class BBB_Traffic
  static void Tick()
  {
   Read();
+  if (!s_bGiveWay && !s_bHandbrake && !s_bEvade) return; // every option off: nothing to do
   if (!BBB.s_Hooks || !GetGame().GetWorld()) return;
   if (!s_aPairs) s_aPairs = {};
   if (!s_mDriven) s_mDriven = new map<IEntity, float>();
