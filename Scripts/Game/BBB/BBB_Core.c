@@ -92,6 +92,9 @@ class BBB_Hooks : Managed
  bool HostOrder(SCR_AIGroup group) { return false; }
  // Something dropped on the ground that the host may clean up later.
  void OnLitter(IEntity item) {}
+ // An unarmed vehicle of this group sees an armed enemy vehicle at threat: the host may take it away
+ // (a new move, its order put back later). False: nothing done (BBB_Traffic).
+ bool Evade(SCR_AIGroup group, IEntity vehicle, vector threat) { return false; }
 }
 
 class BBB
@@ -245,6 +248,7 @@ class BBB
   t = BBB_Perf.Lap("tick.doorUnstick", t);
   BBB_ContactRelay.Tick();
   t = BBB_Perf.Lap("tick.contactRelay", t);
+  BBB_Traffic.Read(); // starts its own quarter-second tick
   BBB_Think.Tick();
 		BBB_Perf.OnTick();
  }
@@ -260,6 +264,7 @@ class BBB
   s_iFrames++;
   BBB_Perf.OnFrame();
   BBB_Unstick.FrameAll();
+  BBB_PullOver.FrameAll();
   int armorStarted = System.GetTickCount();
   BBB_ArmorReaction.Frame();
   BBB_Perf.Add("frame.armorReaction", System.GetTickCount() - armorStarted);
