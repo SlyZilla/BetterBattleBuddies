@@ -5,7 +5,9 @@
 //  3. the built-in Vanilla preset turns features off;
 //  4. the next mission without a preset gets the defaults back (statics outlive a mission);
 //  5. JSON round trip of an awkward name and every kind of value; a broken file is refused;
-//  6. the Settings tab layout resource loads.
+//  6. the Settings tab layout resource loads;
+//  7. hot AI: both switches off by default, a preset turns them on, a Game Master's switch lasts the
+//     mission only, and the Game Master attribute list loads with its two attributes.
 // What it doesn't establish: anything on screen (the tab is checked by eye in a client), or
 // AI behaviour (no behaviour changes here; each feature's own suite covers its values).
 class BBB_SettingsTest
@@ -13,7 +15,7 @@ class BBB_SettingsTest
  static ref BBB_SettingsTest s_Test;
  protected int m_iChecks;
  protected int m_iFailures;
- static const int EXPECTED = 65;
+ static const int EXPECTED = 70;
  static const string FILE = "$profile:BBB/Presets/BBB_settings_test.json";
 
  static void MaybeStart()
@@ -58,6 +60,7 @@ class BBB_SettingsTest
   BBB_Buildings.Read();
   BBB_ContactRelay.Read();
   BBB_Flares.Read();
+  BBB_HotAI.Read();
  }
 
  // A rifleman spawned now: the skill and spotting factor his combat component starts with.
@@ -115,6 +118,7 @@ class BBB_SettingsTest
   Near("default-rearm-radius", BBB_Rearm.s_fSearchRadius, BBB_Settings.Find("bbbRearmRadius").m_sDefault.ToFloat());
   Check("default-tactic-fire-off", !BBB_Tactic.s_bFire);
   Check("default-smoke-on", BBB_Smoke.s_bOn);
+  Check("default-hotai-off", !BBB_HotAI.s_bOn && !BBB_HotAI.s_bVehicles && !BBB_HotAI.s_bTrace, string.Format("spotting=%1 vehicles=%2 trace=%3", BBB_HotAI.s_bOn, BBB_HotAI.s_bVehicles, BBB_HotAI.s_bTrace));
   Near("cli-arc-without-preset", BBB_StaticWeapons.s_fMaxArcDeg, 120);
   int skill0;
   float perception0;
@@ -138,7 +142,9 @@ class BBB_SettingsTest
   preset.SetValue(BBB_Settings.Find("bbbFlaresSquadCooldown"), "300");
   preset.SetValue(BBB_Settings.Find("bbbAISkill"), "80");
   preset.SetValue(BBB_Settings.Find("bbbAIPerception"), "2");
-  Check("preset-default-not-stored", preset.m_Values.Count() == 13, preset.m_Values.Count().ToString());
+  preset.SetValue(BBB_Settings.Find("bbbHotAI"), "1");
+  preset.SetValue(BBB_Settings.Find("bbbHotVehicles"), "1");
+  Check("preset-default-not-stored", preset.m_Values.Count() == 15, preset.m_Values.Count().ToString());
   Check("preset-saved", preset.Save() && FileIO.FileExists(FILE), preset.m_sFile);
   Check("preset-listed", BBB_Preset.Find("bbb_settings_test") != null);
   Mission("BBB settings test");
@@ -155,6 +161,10 @@ class BBB_SettingsTest
   Near("preset-relay-voice", BBB_ContactRelay.s_fVoiceM, 0);
   Near("preset-morale-break", BBB_Morale.s_fBreakScore, 0.9);
   Near("preset-flares-cooldown", BBB_Flares.s_fSquadCooldownMs, 300000);
+  Check("preset-hotai-on", BBB_HotAI.s_bOn && BBB_HotAI.s_bVehicles);
+  // A Game Master switches spotting off and vehicles stays as the preset has it.
+  BBB_HotAI.SetByGameMaster(false, false);
+  Check("gm-switch", !BBB_HotAI.s_bOn && BBB_HotAI.s_bVehicles && BBB_HotAI.s_iGMSpotting == 0 && BBB_HotAI.s_iGMVehicles == -1);
   int skill;
   float perception;
   Soldier(skill, perception);
@@ -193,6 +203,7 @@ class BBB_SettingsTest
   Near("restored-tactic-hold", BBB_Tactic.s_fHoldS, 45);
   Near("restored-relay-voice", BBB_ContactRelay.s_fVoiceM, 60);
   Near("restored-morale-break", BBB_Morale.s_fBreakScore, 0.7);
+  Check("restored-hotai-off-gm-forgotten", !BBB_HotAI.s_bOn && !BBB_HotAI.s_bVehicles && BBB_HotAI.s_iGMSpotting == -1);
   Soldier(skill, perception);
   Check("spawn-restored-skill", skill == skill0, skill.ToString());
   Near("spawn-restored-perception", perception, 1);
@@ -218,6 +229,13 @@ class BBB_SettingsTest
   // 6. The tab's layout.
   Resource layout = Resource.Load(SCR_SettingsSuperMenu.BBB_TAB);
   Check("tab-layout-loads", layout && layout.IsValid());
+
+  // 7. The Game Master attributes.
+  SCR_EditorAttributeList attributes = BBB_HotAIEditor.List();
+  bool both = attributes && attributes.GetAttributesCount() == 2 && BBB_HotAISpottingEditorAttribute.Cast(attributes.GetAttribute(0)) && BBB_HotAIVehiclesEditorAttribute.Cast(attributes.GetAttribute(1));
+  int count = -1;
+  if (attributes) count = attributes.GetAttributesCount();
+  Check("gm-attributes-load", both, count.ToString());
 
   preset.Delete();
   Check("preset-deleted", !FileIO.FileExists(FILE));
