@@ -283,6 +283,20 @@ class BBB_Settings
   Def(g, "bbbBinocsUnderFire", BBB_ESettingKind.CHOICE, "0", "Binoculars under fire", "Soldiers being shot at or hit don't raise binoculars at distant threats.").Choices("0|1", "Kept down|Vanilla").Vanilla("1");
   Off(g, "bbbAimTuning", "Proposed aim tuning", "Sets launcher aim error 1 and aim error at 600 m 3 (not yet backed by a test).");
   On(g, "bbbExposedFire", "Fight back when pinned in the open", "A suppressed soldier with no cover keeps spotting and returns fire faster; in cover he still keeps his head down.");
+  Off(g, "bbbHotAI", "Hot AI: spotting and fire timing", "Soldiers spot faster and keep their eyes when shot at, shoot sooner, and fire longer bursts with shorter aiming pauses. Off: vanilla. A Game Master can switch it in the game settings.");
+  Num(g, "bbbHotFloor", 2.5, 0, 5, 0.1, "Hot AI: least spotting factor", "With spotting and fire timing on. Vanilla spots at 1 when calm and 0.4 under fire; this is the least, before the multiplier.");
+  Num(g, "bbbHotSpot", 3, 0.5, 10, 0.1, "Hot AI: spotting multiplier", "With spotting and fire timing on. Times the spotting speed on top of everything else.");
+  Num(g, "bbbHotWait", 0.25, 0, 1, 0.05, "Hot AI: first-shot wait", "With spotting and fire timing on. Times vanilla's wait before the first shot at a new target.");
+  Num(g, "bbbHotBurst", 2, 0.5, 4, 0.1, "Hot AI: burst length", "With spotting and fire timing on. Times vanilla's bursts on full auto.");
+  Num(g, "bbbHotPause", 0.4, 0.1, 1, 0.05, "Hot AI: aiming pause", "With spotting and fire timing on. Times vanilla's pause to aim between bursts and shots.");
+  Off(g, "bbbHotVehicles", "Hot AI: gunners and vehicles", "Turret gunners get time to aim, hold their target, feel hits on their vehicle, fire on what they lost sight of or what their crew sees, and use the main gun; a hit armed vehicle slows down. Off: vanilla. A Game Master can switch it in the game settings.");
+  Num(g, "bbbHotTurretAim", 3, 1, 10, 0.5, "Hot AI: turret aiming time", "With gunners and vehicles on. Times vanilla's time a gunner in a turret gets to bring the gun onto the target before the shot is dropped (1 s for machine guns and autocannons).");
+  Num(g, "bbbHotTurretHold", 6, 0, 20, 0.5, "Hot AI: gunner holds his target (s)", "With gunners and vehicles on. A gunner in a turret keeps a target he can see this long before looking for another, unless someone else shoots at him. 0: vanilla (every 0.5 s).");
+  On(g, "bbbHotVehicleHit", "Hot AI: gunners feel hits on their vehicle", "With gunners and vehicles on. A hit on an armed vehicle tells its gunners where it came from, as a hit on themselves would.");
+  Num(g, "bbbHotUnderFireKmh", 20, 0, 60, 1, "Hot AI: speed under fire (km/h)", "With gunners and vehicles on. An AI-driven armed vehicle that is hit slows to this, so its gunner can shoot. 0: no slowing.");
+  Num(g, "bbbHotUnderFireS", 15, 1, 60, 1, "Hot AI: slow for (s)", "With gunners and vehicles on. How long after the last hit the vehicle stays slow.");
+  On(g, "bbbHotGunnerFire", "Hot AI: gunner fire control", "With gunners and vehicles on. A gunner who sees no target puts fire on the one he lost sight of, an enemy who shot at him, or what his crewmates see.");
+  On(g, "bbbHotMainGun", "Hot AI: main gun on everything", "With gunners and vehicles on. A turret gunner uses the main gun (autocannon, or the machine gun in the lowest slot) against infantry and for suppression, not the coaxial MG.");
   On(g, "bbbSkySuppression", "No firing at aircraft noises", "Gunners don't suppress the sky because a shot was reported from an aircraft.");
 
   g = "Suppression";
@@ -389,6 +403,7 @@ class BBB_Settings
   Num(g, "bbbAIPerception", 1, 0.25, 3, 0.05, "Spotting speed", "How fast AI soldiers spot what they see. 1 is vanilla. A host mod or Game Master that sets it for a soldier still wins.");
 
   g = "Diagnostics";
+  Off(g, "bbbHotTrace", "Hot AI: gunner trace in the log", "Every 2 s, a log line per AI vehicle gunner in contact: what he is doing, his target, gun and bursts.");
   Def(g, "bbbThink", BBB_ESettingKind.CHOICE, "0", "Think panel", "Look at a soldier to see BBB's decisions and its reasons for holding back. For hosts and mission makers.").Choices("0|1|2", "Off|On|On, with log notes");
   Off(g, "bbbTacticStats", "Squad plan stats in the log", "Logs how far each squad plan really moved the squad, and a minute-by-minute count of squads in contact and why plans were left out. For testing.");
  }

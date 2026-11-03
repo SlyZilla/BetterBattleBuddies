@@ -1,0 +1,7 @@
+MetaFileClass {
+ Name "{BBB0ED17A0000001}Configs/BBB/BBB_EditorAttributes.conf"
+ Configurations {
+  CONFResourceClass PC {}
+  CONFResourceClass HEADLESS : PC {}
+ }
+}
