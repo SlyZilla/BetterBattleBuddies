@@ -21,6 +21,8 @@ class BBB_ReturnFire
 	static int s_iRead;
 	static bool s_bOn;
 	static int s_iFires;		// bursts started (tests and the log)
+	static int s_iShotAt;		// rounds past or hits reported to it (tests)
+	protected static ref map<string, int> s_mWhyNot;	// why a report started no burst (tests); made on first use
 	static const float MIN_M = 3;
 	static const float MAX_M = 500;			// vanilla's audible range for a normal gunshot
 	static const float BURST_S = 3.5;
@@ -44,27 +46,31 @@ class BBB_ReturnFire
 	static void OnShotAt(SCR_AIUtilityComponent utility, vector from, string how)
 	{
 		Read();
-		if (!s_bOn || !BBB.IsStarted() || !utility || !Replication.IsServer()) return;
+		if (!s_bOn) return;
+		s_iShotAt++;
+		if (!BBB.IsStarted() || !utility || !Replication.IsServer()) { WhyNot("not running"); return; }
 		IEntity man = utility.m_OwnerEntity;
-		if (!man || !BBB.IsAlive(man) || BBB.PlayerOf(man) != 0 || !utility.IsMilitary()) return;
-		if (!utility.m_AIInfo || !utility.m_CombatComponent || !utility.m_PerceptionComponent) return;
-		if (utility.m_AIInfo.HasUnitState(EUnitState.IN_VEHICLE) || utility.m_AIInfo.HasUnitState(EUnitState.IN_TURRET) || utility.m_AIInfo.HasUnitState(EUnitState.UNCONSCIOUS)) return;
-		if (utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) return;
+		if (!man || !BBB.IsAlive(man) || BBB.PlayerOf(man) != 0 || !utility.IsMilitary()) { WhyNot("not an AI soldier"); return; }
+		if (!utility.m_AIInfo || !utility.m_CombatComponent || !utility.m_PerceptionComponent) { WhyNot("no AI parts"); return; }
+		if (utility.m_AIInfo.HasUnitState(EUnitState.IN_VEHICLE) || utility.m_AIInfo.HasUnitState(EUnitState.IN_TURRET) || utility.m_AIInfo.HasUnitState(EUnitState.UNCONSCIOUS)) { WhyNot("in a vehicle or down"); return; }
+		if (utility.m_CombatComponent.GetCombatMode() == EAIGroupCombatMode.HOLD_FIRE) { WhyNot("hold fire"); return; }
 		float now = GetGame().GetWorld().GetWorldTime();
-		if (now < utility.m_fBBBReturnFireNext) return;
+		if (now < utility.m_fBBBReturnFireNext) { WhyNot("cooling down"); return; }
 		vector me = man.GetOrigin();
 		float distance = vector.Distance(me, from);
-		if (distance < MIN_M || distance > MAX_M || !BBB_SuppressionSafety.GroundSector(from)) return;
+		if (distance < MIN_M || distance > MAX_M) { WhyNot("out of range"); return; }
+		if (!BBB_SuppressionSafety.GroundSector(from)) { WhyNot("from the sky"); return; }
 		// He can see the shooter, or another enemy right there: vanilla's aimed fire has him.
 		BaseTarget current = utility.m_CombatComponent.GetCurrentTarget();
-		if (current && utility.m_CombatComponent.IsTargetVisible(current)) return;
-		if (SeenNear(utility, from)) return;
-		if (BBB_OrderIntent.Blocks(utility)) return;
+		if (current && utility.m_CombatComponent.IsTargetVisible(current)) { WhyNot("sees his target"); return; }
+		if (SeenNear(utility, from)) { WhyNot("sees an enemy there"); return; }
+		if (BBB_OrderIntent.Blocks(utility)) { WhyNot("under an order"); return; }
 		utility.m_fBBBReturnFireNext = now + COOLDOWN_S * 1000;
 		RandomGenerator roll = new RandomGenerator();
 		roll.SetSeed((int)(me[0] * 10) * 7919 + (int)(me[2] * 10) * 31 + (int)(now / 1000));
 		if (roll.RandFloat01() >= CHANCE)
 		{
+			WhyNot("rolled to keep his head down");
 			BBB_Think.NoteUtility(utility, "ReturnFire", "shot at by an unseen enemy: keeps his head down this time");
 			return;
 		}
@@ -78,6 +84,21 @@ class BBB_ReturnFire
 		s_iFires++;
 		PrintFormat("[BBB] RETURN FIRE %1: %2 from an unseen enemy %3 m away, fires back at %4", man, how, Math.Round(distance), aim);
 		BBB_Think.NoteUtility(utility, "ReturnFire", "fires back at an unseen shooter, " + Math.Round(distance) + " m");
+	}
+
+	protected static void WhyNot(string why)
+	{
+		if (!s_mWhyNot) s_mWhyNot = new map<string, int>();
+		s_mWhyNot.Set(why, s_mWhyNot.Get(why) + 1);
+	}
+
+	// Why reports started no burst, as "reason n, ..." (tests).
+	static string WhyNotSummary()
+	{
+		string text;
+		if (!s_mWhyNot) return text;
+		foreach (string why, int n : s_mWhyNot) text += string.Format("%1 %2, ", why, n);
+		return text;
 	}
 
 	// An enemy he saw in the last SEEN_S, within SEEN_M of where the shots came from.
@@ -134,6 +155,9 @@ class BBB_AIReturnFireBehavior : SCR_AISuppressBehavior
 }
 
 // A round past him (vanilla's flyby: within 13 m of its line), from an enemy (vanilla checked).
+// Built from the AI config, so it repeats vanilla's attribute: without it the config can't build the
+// reaction and the soldier loses it altogether (srv:returnfire, 3 Nov: no gunshot or damage reaction).
+[BaseContainerProps()]
 modded class SCR_AIDangerReaction_WeaponFired
 {
 	override void OnProjectileFlyby(notnull SCR_AIUtilityComponent utility, int dangerEventCount, vector pos)
@@ -143,7 +167,8 @@ modded class SCR_AIDangerReaction_WeaponFired
 	}
 }
 
-// A hit on him, from wherever the shooter stands.
+// A hit on him, from wherever the shooter stands. Vanilla's attribute repeated, as above.
+[BaseContainerProps()]
 modded class SCR_AIDangerReaction_DamageTaken
 {
 	override bool PerformReaction(notnull SCR_AIUtilityComponent utility, notnull SCR_AIThreatSystem threatSystem, AIDangerEvent dangerEvent, int dangerEventCount)
