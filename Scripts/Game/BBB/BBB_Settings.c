@@ -360,6 +360,8 @@ class BBB_Settings
   Num(g, "bbbMoraleDistance", 25, 10, 50, 1, "Withdrawal bound (m)", "Length of each bound when a squad falls back.");
   Num(g, "bbbMoraleBreak", 0.7, 0.3, 1, 0.05, "Breaking point", "Morale score (losses, suppression, leader lost) at which a squad breaks. Higher: squads hold out longer.");
   Num(g, "bbbMoraleWithdraw", 90, 30, 250, 5, "Withdrawal distance (m)", "How far a broken squad falls back in all.");
+  On(g, "bbbWithdrawOrder", "Covered fall-back on orders", "A squad its commander pulls back while under fire bounds back in covering halves instead of going to ground.");
+  Num(g, "bbbWithdrawOrderBound", 40, 20, 60, 1, "Fall-back bound (m)", "Length of each bound when a squad falls back on orders.");
 
   g = "Medical and ammo";
   On(g, "bbbMedic", "Safer healing", "Medics and buddies don't run through fire to a casualty and heal from cover.");

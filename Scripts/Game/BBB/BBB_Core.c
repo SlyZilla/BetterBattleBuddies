@@ -15,7 +15,8 @@ enum BBB_EIntent
  NONE,    // a player's squad: leave it alone
  TRANSIT, // soldiers' own reactions only
  HOLD,    // defend; assault only inside the leash
- PUSH     // ground to take: assault and flank, hold only when outnumbered or flanked
+ PUSH,    // ground to take: assault and flank, hold only when outnumbered or flanked
+ WITHDRAW // fall back to centre (arrived within radius): in contact the squad bounds back in covered halves (BBB_Morale)
 }
 
 // What the host mod tells BBB. The defaults suit plain vanilla groups.
@@ -69,6 +70,7 @@ class BBB_Hooks : Managed
  // defend (assault only what comes inside the leash). TRANSIT: no squad-level fighting, only
  // the soldiers' own reactions (riding, forming up, forced moves). NONE: a player's squad.
  // radius > 0 sets the leash (centre, radius), as HostLeash; 0 leaves the order leash.
+ // WITHDRAW: centre is where the squad falls back to and radius how close counts as there.
  // AllowSquadTactic stays a plain on/off for the tactic layer on top of this.
  // Default: built from the older hooks and the squad's waypoint, so a host that doesn't
  // override it keeps what it had, except that a squad allowed either now gets both.

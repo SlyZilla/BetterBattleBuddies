@@ -102,6 +102,7 @@ Server owners can disable features individually:
 | `-bbbStaticWeapons 0` | Autonomous static-weapon crewing |
 | `-bbbHoldGuns 0` | Gunners staying on static guns a host mod marks as held |
 | `-bbbMorale 0` | Morale-driven withdrawal and surrender |
+| `-bbbWithdrawOrder 0` | Covered fall-back when the host mod orders a squad back under fire |
 | `-bbbBuildings 0` | Contact-driven indoor cover movement |
 | `-bbbFlares 0` | BBB's autonomous night-illumination requests |
 | `-bbbDoorUnstick 0` | Opening or flipping doors that block movement |
