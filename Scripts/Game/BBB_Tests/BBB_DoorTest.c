@@ -10,7 +10,9 @@ class BBB_DoorTestHooks : BBB_Hooks
 // doorway, twice: first with the host veto (BBB swings nothing), then with door
 // unstick on. Judged on physical outcomes: soldiers standing jammed next to the
 // door (measured by the test, not by the module's counters), soldiers through the
-// doorway at the end, and the door leaf's real state after a swing.
+// doorway at the end, and the door leaf's real state after a swing. Then the end of a failed round
+// on a soldier really walking (a man held still loses his path, so a real stall can't be staged):
+// he is set further along his path each time, and in the end he and the door are left alone.
 class BBB_DoorTest : BBB_AimTest
 {
  static ref BBB_DoorTest s_DoorTest;
@@ -38,6 +40,11 @@ class BBB_DoorTest : BBB_AimTest
  ref array<int> m_Freed = {};
  int m_Checks;
  int m_Failures;
+ AIAgent m_Walker;
+ ref BBB_DoorStall m_Stall;
+ ref array<float> m_StepsTaken = {};
+ int m_WalkerGaveUp;
+ vector m_vStepFrom;
  int m_WalkingSamples; // moved and reported a path to walk
  int m_MovingSamples;  // moved at all
 
@@ -258,12 +265,85 @@ class BBB_DoorTest : BBB_AimTest
   DoorCheck("swings-when-jammed", m_Jammed[1] == 0 || swingsOn > 0, string.Format("jammed=%1 swings=%2", m_Jammed[1], swingsOn));
   DoorCheck("jammed-soldier-moves-after-swing", swingsOn == 0 || freedOn > 0, string.Format("swings=%1 freed=%2", swingsOn, freedOn));
   DoorCheck("more-through-than-baseline", m_Through[1] > m_Through[0], string.Format("off=%1 on=%2", m_Through[0], m_Through[1]));
+  BeginPinned();
+ }
+
+ void BeginPinned()
+ {
+  m_Hooks.m_Veto = true; // the module's own tick stays out of this
+  BBB_DoorUnstick.Stop();
+  m_Team = SCR_AIGroup.Cast(Spawn(TEAM_US, m_Outside - m_Inward * 5, m_Inward));
+  if (!m_Team) { DoorCheck("walker-team", false); DoorFinish(); return; }
+  GetGame().GetCallqueue().CallLater(WalkerOrder, 3000);
+ }
+
+ void WalkerOrder()
+ {
+  PinDetail(m_Team);
+  m_Team.ActivateAI();
+  array<AIAgent> agents = {};
+  m_Team.GetAgents(agents);
+  foreach (AIAgent agent : agents)
+  {
+   PinDetail(agent);
+   agent.ActivateAI();
+   if (!m_Walker && agent.GetControlledEntity()) m_Walker = agent;
+  }
+  m_Team.GetGroupUtilityComponent().SetCombatMode(EAIGroupCombatMode.HOLD_FIRE);
+  m_Order = AIWaypoint.Cast(Spawn("{750A8D1695BD6998}Prefabs/AI/Waypoints/AIWaypoint_Move.et", BBB.Ground(m_Center - m_Inward * 200), m_Inward));
+  if (m_Order) m_Team.AddWaypoint(m_Order);
+  m_Stall = new BBB_DoorStall();
+  m_WalkerGaveUp = BBB_DoorUnstick.s_iGaveUp;
+  m_PhaseStart = Now();
+  GetGame().GetCallqueue().CallLater(WalkerRound, 2000, true);
+ }
+
+ // One failed round every time he has a path, until the module has given up on him.
+ void WalkerRound()
+ {
+  ChimeraCharacter man;
+  if (m_Walker) man = ChimeraCharacter.Cast(m_Walker.GetControlledEntity());
+  bool over = !man || BBB_DoorUnstick.s_iGaveUp > m_WalkerGaveUp || Now() - m_PhaseStart > 60;
+  if (over) { WalkerJudge(); return; }
+  if (!BBB_DoorUnstick.WantsToMove(m_Walker)) return;
+  vector before = man.GetOrigin();
+  int steps = m_Stall.m_Steps;
+  BBB_DoorUnstick.RoundFailed(m_Walker, man, m_Stall, before, Now() * 1000);
+  if (m_Stall.m_Steps <= steps) return;
+  m_vStepFrom = before;
+  GetGame().GetCallqueue().CallLater(WalkerLanded, 100);
+ }
+
+ // A teleport lands on a later frame.
+ void WalkerLanded()
+ {
+  IEntity man;
+  if (m_Walker) man = m_Walker.GetControlledEntity();
+  if (man) m_StepsTaken.Insert(vector.DistanceXZ(m_vStepFrom, man.GetOrigin()));
+ }
+
+ void WalkerJudge()
+ {
+  GetGame().GetCallqueue().Remove(WalkerRound);
+  string taken = "";
+  bool longer = m_StepsTaken.Count() == BBB_DoorUnstick.MAX_STEPS;
+  foreach (int i, float step : m_StepsTaken)
+  {
+   taken += string.Format(" %1", step);
+   // It moved him, no further than asked (a follower's path can be shorter; navmesh snap, and he
+   // walks on).
+   if (step < 1 || step > BBB_DoorUnstick.STEP_M * (i + 1) + 2.5) longer = false;
+  }
+  DoorCheck("set-along-his-path", longer, string.Format("steps:%1", taken));
+  DoorCheck("gave-up-after-the-steps", BBB_DoorUnstick.s_iGaveUp > m_WalkerGaveUp && !m_Stall.m_Door, string.Format("gave up %1 next in %2 s", BBB_DoorUnstick.s_iGaveUp - m_WalkerGaveUp, m_Stall.m_Next / 1000 - Now()));
+  DoorCheck("then-left-alone-for-minutes", m_Stall.m_Next / 1000 - Now() > 200, "");
   DoorFinish();
  }
 
  void DoorFinish()
  {
   GetGame().GetCallqueue().Remove(Poll);
+  GetGame().GetCallqueue().Remove(WalkerRound);
   BBB_DoorUnstick.Stop();
   if (m_SavedHooks) BBB.s_Hooks = m_SavedHooks;
   string verdict = "FAIL";
