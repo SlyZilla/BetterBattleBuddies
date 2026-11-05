@@ -313,16 +313,28 @@ class BBB_ReactionTest : BBB_AimTest
   Assert("armor-reverse-started", reacted && BBB_ArmorReaction.s_Escapes.Count() == 1 && !m_DriverControl.IsAIActivated(), string.Format("clearance=%1", BBB_ArmorReaction.Clearance(m_Truck)));
   Assert("armor-cooldown", !BBB_ArmorReaction.React(m_Truck, enemy, line, "0 0 -1"));
   m_At = Now();
-  GetGame().GetCallqueue().CallLater(ObserveReverse, 1000, true);
+  GetGame().GetCallqueue().CallLater(ObserveReverse, 250, true);
+  GetGame().GetCallqueue().CallLater(TraceReverse, 250, true);
+ }
+
+ void TraceReverse()
+ {
+  if (!m_Truck || Now() - m_At > 3.5) { GetGame().GetCallqueue().Remove(TraceReverse); return; }
+  CarControllerComponent c = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
+  vector m[4]; m_Truck.GetWorldTransform(m);
+  PrintFormat("[BBB] REACTION trace t=%1 fwd=%2 gear=%3 thr=%4 clutch=%5 brake=%6 rpm=%7 jobs=%8 ai=%9", Now() - m_At, vector.Dot(m_Truck.GetPhysics().GetVelocity(), m[2]), c.GetSimulation().GetGear(), c.GetSimulation().GetThrottle(), c.GetSimulation().GetClutch(), c.GetSimulation().GetBrake(), c.GetSimulation().EngineGetRPM(), BBB_ArmorReaction.s_Escapes.Count(), m_DriverControl.IsAIActivated());
  }
 
  void ObserveReverse()
  {
-  if (Now() - m_At < 3) return;
+  // 1.5 s, while the reverse still runs (from 1.9, with the seat held, it backs at 2-3 m/s and reaches
+  // its 7 m bound before 3 s), so the order check below cancels a real one.
+  if (Now() - m_At < 1.5) return;
   GetGame().GetCallqueue().Remove(ObserveReverse);
   vector moved = m_Truck.GetOrigin() - m_TruckStart;
   CarControllerComponent motionCar = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
-  PrintFormat("[BBB] REACTION motion jobs=%1 ai=%2 gear=%3 throttle=%4 brake=%5 awake=%6 frames=%7", BBB_ArmorReaction.s_Escapes.Count(), m_DriverControl.IsAIActivated(), motionCar.GetSimulation().GetGear(), motionCar.GetSimulation().GetThrottle(), motionCar.GetSimulation().GetBrake(), m_Truck.GetPhysics().IsActive(), BBB.s_iFrames);
+  PrintFormat("[BBB] REACTION motion jobs=%1 ai=%2 gear=%3 throttle=%4 brake=%5 awake=%6 frames=%7 engine=%8 rpm=%9", BBB_ArmorReaction.s_Escapes.Count(), m_DriverControl.IsAIActivated(), motionCar.GetSimulation().GetGear(), motionCar.GetSimulation().GetThrottle(), motionCar.GetSimulation().GetBrake(), m_Truck.GetPhysics().IsActive(), BBB.s_iFrames, motionCar.IsEngineOn(), motionCar.GetSimulation().EngineGetRPM());
+  PrintFormat("[BBB] REACTION motion2 hb=%1 hbsim=%2 persistent=%3 clutch=%4 simEngine=%5 speed=%6", motionCar.GetHandBrake(), motionCar.GetSimulation().IsHandbrakeOn(), motionCar.GetPersistentHandBrake(), motionCar.GetSimulation().GetClutch(), motionCar.GetSimulation().EngineIsOn(), m_Truck.GetPhysics().GetVelocity().Length());
   Assert("observed-reverse-motion", BBB_ArmorReaction.s_Escapes.Count() == 1 && moved[2] < -0.4, string.Format("delta=%1", moved));
   m_Crew.AddWaypoint(m_Order);
   GetGame().GetCallqueue().CallLater(AfterOrder, 300);
@@ -332,6 +344,8 @@ class BBB_ReactionTest : BBB_AimTest
  {
   Assert("order-cancels-reverse", BBB_ArmorReaction.s_Escapes.IsEmpty());
   Assert("restores-owned-driver-ai", m_DriverControl.IsAIActivated());
+  CarControllerComponent seatCar = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
+  Assert("restores-driver-seat", seatCar.GetPilotCompartmentSlot() != null && !BBB_PilotHold.Held(seatCar) && BBB_ArmorReaction.Driver(m_Truck) == m_Driver);
   Assert("preserves-order", m_Crew.GetCurrentWaypoint() == m_Order);
   BBB_ArmorReaction.Stop();
   m_Crew.RemoveWaypoint(m_Order);
@@ -398,6 +412,43 @@ class BBB_ReactionTest : BBB_AimTest
  {
   Assert("controlled-rocket-segment-response", BBB_ArmorReaction.s_iReactions > m_ReactionsBefore,
    string.Format("before=%1 after=%2", m_ReactionsBefore, BBB_ArmorReaction.s_iReactions));
+  BeginHandbrake();
+ }
+
+ // Handbrake when the driver leaves (on by default since 1.9: an empty vehicle drops into neutral and
+ // rolls). The AI driver gets out with the game's own animated get-out, which sets no handbrake; BBB must.
+ int m_HandbrakesBefore;
+ int m_HandbrakePolls;
+
+ void BeginHandbrake()
+ {
+  BBB_ArmorReaction.Stop();
+  CarControllerComponent car = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
+  car.SetPersistentHandBrake(false);
+  if (!m_DriverControl.IsAIActivated()) m_DriverControl.ActivateAI();
+  // BBB's once-a-second scan must see an AI at the wheel before he leaves.
+  GetGame().GetCallqueue().CallLater(DriverLeaves, 2500);
+ }
+
+ void DriverLeaves()
+ {
+  CarControllerComponent car = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
+  Assert("handbrake-fixture-off", BBB_Traffic.s_bHandbrake && !car.GetPersistentHandBrake() && BBB.DriverOf(m_Truck) == m_Driver);
+  m_HandbrakesBefore = BBB_Traffic.s_iHandbrakes;
+  m_HandbrakePolls = 0;
+  m_Driver.GetCompartmentAccessComponent().GetOutVehicle(EGetOutType.ANIMATED, -1, ECloseDoorAfterActions.LEAVE_OPEN, false);
+  GetGame().GetCallqueue().CallLater(ObserveHandbrake, 500, true);
+ }
+
+ void ObserveHandbrake()
+ {
+  m_HandbrakePolls++;
+  CarControllerComponent car = CarControllerComponent.Cast(m_Truck.FindComponent(CarControllerComponent));
+  bool left = !m_Driver.IsInVehicle();
+  bool braked = car.GetPersistentHandBrake() && BBB_Traffic.s_iHandbrakes > m_HandbrakesBefore;
+  if (!(left && braked) && m_HandbrakePolls < 20) return;
+  GetGame().GetCallqueue().Remove(ObserveHandbrake);
+  Assert("handbrake-after-driver-left", left && braked, string.Format("out=%1 handbrake=%2 bbbSet=%3 after %4 s", left, car.GetPersistentHandBrake(), BBB_Traffic.s_iHandbrakes - m_HandbrakesBefore, m_HandbrakePolls * 0.5));
   FinishReaction();
  }
 
@@ -406,6 +457,7 @@ class BBB_ReactionTest : BBB_AimTest
   GetGame().GetCallqueue().Remove(ObserveBuilding);
   GetGame().GetCallqueue().Remove(ObserveReverse);
   GetGame().GetCallqueue().Remove(ObserveNativeAT);
+  GetGame().GetCallqueue().Remove(ObserveHandbrake);
   BBB_Buildings.Stop(); BBB_ArmorReaction.Stop();
   BBB.s_Hooks = m_SavedHooks;
   string verdict = "PASS";

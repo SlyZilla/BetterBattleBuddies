@@ -822,9 +822,12 @@ class BBB_Morale
 			return;
 		}
 		// Stalled on orders: the host sees no progress either and decides (smoke, a forced move).
+		// A stalled break keeps its old cooldown.
 		if (state.m_iStalledBounds >= MAX_STALLED_BOUNDS)
 		{
-			EndWithdrawal(state, now, false, "stalled", currentDistToThreat, cooldown * 3);
+			float stallCooldown = cooldown;
+			if (state.m_bOrdered) stallCooldown = cooldown * 3;
+			EndWithdrawal(state, now, false, "stalled", currentDistToThreat, stallCooldown);
 			return;
 		}
 		if (!state.m_bOrdered && state.m_fTotalWithdrawn >= s_fMaxWithdrawDist)
@@ -991,6 +994,14 @@ class BBB_Morale
 			{
 				DropWithdrawal(group, now);
 				continue;
+			}
+			// Morale is off for this squad: it is ours only once the host orders it back. Until then
+			// it gets no state (no casualty baseline, no state slot), exactly as without the option.
+			if (!moraleAllowed && !s_mStateOf.Get(group))
+			{
+				vector orderDest;
+				float orderRadius;
+				if (!OrderedTo(group, orderDest, orderRadius)) continue;
 			}
 
 			array<AIAgent> agents = {};
