@@ -114,6 +114,7 @@ class BBB_Morale
 	static const float MOVE_PRIORITY = 91;
 	static const float LEADER_REORG_S = 45.0;      // a fallen leader still counts this long after a new one is named
 	static const float ORDER_CHECK_S = 1.5;        // how often the host's intent is read per squad
+	protected static float s_fNextIdleProbe;       // next read for the squads with morale off (bare: static-init budget)
 	static const float ORDER_RETRY_S = 5.0;        // an ordered fall-back may bound again this soon after one ends
 	static const float ORDER_THREAT_S = 30.0;      // an ordered fall-back keeps bounding while the enemy was seen this recently
 
@@ -982,6 +983,11 @@ class BBB_Morale
 			}
 		}
 
+		// Squads with morale off are asked for the host's order only every ORDER_CHECK_S, all at once:
+		// the host's lookup per squad made it every squad times every squad each second (review, 5 Nov).
+		// (A next time further off than one period is a previous mission's clock: read now.)
+		bool probeIdle = now >= s_fNextIdleProbe || s_fNextIdleProbe - now > ORDER_CHECK_S;
+		if (probeIdle) s_fNextIdleProbe = now + ORDER_CHECK_S;
 		foreach (SCR_AIGroup group : groups)
 		{
 			if (!group) continue;
@@ -999,6 +1005,7 @@ class BBB_Morale
 			// it gets no state (no casualty baseline, no state slot), exactly as without the option.
 			if (!moraleAllowed && !s_mStateOf.Get(group))
 			{
+				if (!probeIdle) continue;
 				vector orderDest;
 				float orderRadius;
 				if (!OrderedTo(group, orderDest, orderRadius)) continue;
