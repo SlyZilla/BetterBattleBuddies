@@ -22,7 +22,8 @@
 //  - Enemy vehicles are never given way to. An unarmed AI vehicle whose crew sees an armed enemy vehicle
 //    within EVADE_M asks the host to take it away (BBB_Hooks.Evade), once per EVADE_EVERY_S; with the
 //    threat ahead within 200 m it first backs away for a few seconds (BBB_Unstick's reverse).
-// Each is an option, off by default until it has been played (Vehicles and crews in the settings tab).
+// Each is an option, off by default until it has been played, except the handbrake (on: Reforger 1.9 drops an
+// empty vehicle into neutral, so a vehicle left on a slope rolls away). Vehicles and crews in the settings tab.
 // All server only; vehicles the host leaves alone (BBB_Hooks.LeaveAlone) are skipped.
 class BBB_Traffic
 {
@@ -56,9 +57,10 @@ class BBB_Traffic
  {
   if (!BBB_Settings.Due(s_iRead)) return;
   string value;
-  // Options, off by default until they have been played.
+  // Options, off by default until they have been played; the handbrake is on (Jacob, 5 Nov: from 1.9 an
+  // empty vehicle drops into neutral and rolls away downhill).
   s_bGiveWay = BBB_Settings.Get("bbbGiveWay", value) && value == "1";
-  s_bHandbrake = BBB_Settings.Get("bbbHandbrake", value) && value == "1";
+  s_bHandbrake = !(BBB_Settings.Get("bbbHandbrake", value) && value == "0");
   s_bEvade = BBB_Settings.Get("bbbEvadeArmour", value) && value == "1";
   PrintFormat("[BBB] TRAFFIC giveWay=%1 handbrake=%2 evade=%3", s_bGiveWay, s_bHandbrake, s_bEvade);
   if (!s_bLoop && Replication.IsServer())
@@ -142,6 +144,10 @@ class BBB_Traffic
   if (!s_aParked) s_aParked = {};
   float now = Now();
   s_iTicks++;
+  // The handbrake looks once a second; with only it on (the default) the driver scan below runs then too,
+  // not four times a second over every soldier.
+  bool handbrakeDue = s_bHandbrake && (s_iTicks % 4) == 0;
+  if (!s_bGiveWay && !s_bEvade && !handbrakeDue) return;
   // The land vehicles with a driver in them, from the groups' drivers.
   array<IEntity> vehicles = {};
   array<SCR_AIGroup> groups = {};
@@ -169,7 +175,7 @@ class BBB_Traffic
    }
   }
   if (s_bGiveWay) GiveWayTick(vehicles, now);
-  if (s_bHandbrake && (s_iTicks % 4) == 0) HandbrakeTick(now);
+  if (handbrakeDue) HandbrakeTick(now);
  }
 
  // ---------------------------------------------------------------- give way
@@ -471,6 +477,7 @@ class BBB_PullOver : Managed
  protected bool m_bStopped;
  protected bool m_bReleased;
  protected bool m_bParkedAI;
+ protected BaseVehicleControllerComponent m_PilotHeld; // driver seat unhooked while we drive (BBB_PilotHold)
  protected ref BBB_PullOverListener m_Listener;
  protected float m_fLogAt;
 
@@ -663,6 +670,7 @@ class BBB_PullOver : Managed
   VehicleWheeledSimulation sim = car.GetSimulation();
   Physics physics = vehicle.GetPhysics();
   if (physics && !physics.IsActive()) physics.SetActive(ActiveState.ACTIVE);
+  if (!m_PilotHeld && BBB_PilotHold.Take(car)) m_PilotHeld = car;
   BBB_Unstick.ReleaseHorn(m_Driver);
   float speed = BBB_Traffic.Velocity(vehicle).Length();
   int neutral = sim.GearboxGearsCount() - sim.GearboxForwardGearsCount() - 1;
@@ -711,6 +719,8 @@ class BBB_PullOver : Managed
   {
    BBB_Unstick.Drive(m_Driver, car.GetSimulation(), 0, 0, 0);
   }
+  if (m_PilotHeld) BBB_PilotHold.Give(m_PilotHeld);
+  m_PilotHeld = null;
   BBB_Unstick.ReleaseHorn(m_Driver);
   if (m_bParkedAI && m_Driver && BBB.IsAlive(m_Driver) && !BBB.PlayerOf(m_Driver))
   {

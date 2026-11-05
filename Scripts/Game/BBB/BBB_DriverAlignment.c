@@ -425,6 +425,9 @@ class BBB_DriverAlignment
    if (!car || !car.GetSimulation()) { End(state); continue; }
    VehicleWheeledSimulation simulation = car.GetSimulation();
    if (!physics.IsActive()) physics.SetActive(ActiveState.ACTIVE);
+   // The seat stays with the controller (no BBB_PilotHold): from 1.9 its automatic gearbox gives the gentle
+   // idle creep this nudge needs, while a held seat engages first gear at once and the truck lurched past
+   // the 1 m/s bound in 250 ms (driveraligncomplete).
    car.SetPersistentHandBrake(false);
    int neutral = simulation.GearboxGearsCount() - simulation.GearboxForwardGearsCount() - 1;
    simulation.SetGear(neutral + 1);
