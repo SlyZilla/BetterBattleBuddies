@@ -447,10 +447,16 @@ class BBB_PullOver : Managed
  static const int MODE_PARK = 0;
  static const int MODE_YIELD = 1;
  static const int MODE_HOLD = 2;
- static const float DRIVE_MAX_MS = 10000;
+ static const float DRIVE_MAX_MS = 16000;
+ static const float STEER_MAX = 0.6;    // at full lock a heavy 4x4 binds and crawls (srv:mannersgetout, 4 Nov: 1.8 km/h at 70% throttle)
  static const float WAIT_MAX_MS = 18000;
  static const float SPOT_AHEAD_M = 11;
  static const float VERGE_M = 2.5;     // past the road's edge
+ static const float SHOULDER_M = 1;    // past the edge, when the verge is a ditch or a bank
+ static const float EDGE_IN_M = 1.2;   // inside the edge: the road's own right side, when nothing off it is drivable
+ static const float STEP_M = 0.5;      // the ground is sampled every half metre out from the road's middle...
+ static const float STEP_RISE_M = 0.25; // ...and a rise or drop of more than this between two samples isn't drivable
+ static string s_sWhere;               // where the last VergeSpot put it: "verge", "shoulder" or "road edge" (the host logs it)
  static int s_iParked;                // tests and the log
  static string s_sWhyNot;             // why the last Begin or VergeSpot refused (the host logs it)
  protected static ref array<ref BBB_PullOver> s_aActive;
@@ -477,7 +483,7 @@ class BBB_PullOver : Managed
  }
 
  // side: 1 the verge on the vehicle's right, -1 its left (MODE_HOLD ignores it).
- static bool Begin(IEntity vehicle, ChimeraCharacter driver, int mode, int side, IEntity other, BBB_PullOverListener listener)
+ static bool Begin(IEntity vehicle, ChimeraCharacter driver, int mode, int side, IEntity other, BBB_PullOverListener listener, float ahead = 0)
  {
   s_sWhyNot = "";
   if (!vehicle || !driver || !BBB_Traffic.AIDriver(driver)) { s_sWhyNot = "no AI driver"; return false; }
@@ -492,7 +498,7 @@ class BBB_PullOver : Managed
   pull.m_Other = other;
   pull.m_Listener = listener;
   pull.m_fStart = GetGame().GetWorld().GetWorldTime();
-  if (mode != MODE_HOLD) pull.m_bHasSpot = VergeSpot(vehicle, side, pull.m_vSpot);
+  if (mode != MODE_HOLD) pull.m_bHasSpot = VergeSpot(vehicle, side, pull.m_vSpot, ahead);
   if (mode == MODE_PARK && !pull.m_bHasSpot) return false; // nowhere to pull over to: the host gets out where it is
   ai.DeactivateAI();
   pull.m_bParkedAI = true;
@@ -518,7 +524,10 @@ class BBB_PullOver : Managed
 
  // A spot on the verge SPOT_AHEAD_M ahead of the vehicle, VERGE_M past the edge of the road it is on,
  // on the side asked, on dry, fairly level ground with nothing solid in the way.
- static bool VergeSpot(IEntity vehicle, int side, out vector spot)
+ // A spot to pull over to, 'ahead' m on along the road (SPOT_AHEAD_M when 0 or less): the verge, else the
+ // shoulder, else the road's own right edge, whichever is first drivable from the road's middle (no ditch or
+ // bank on the way, nothing solid there or on the way). False: not on a road, or even the road's edge is blocked.
+ static bool VergeSpot(IEntity vehicle, int side, out vector spot, float ahead = 0)
  {
   vector at = vehicle.GetOrigin();
   vector point, dir;
@@ -532,14 +541,46 @@ class BBB_PullOver : Managed
   if (vector.Dot(dir, forward) < 0) dir = -dir;
   vector right = Vector(dir[2], 0, -dir[0]);
   if (side < 0) right = -right;
-  vector ahead = point + dir * SPOT_AHEAD_M;
-  spot = ahead + right * (width * 0.5 + VERGE_M);
-  spot[1] = GetGame().GetWorld().GetSurfaceY(spot[0], spot[2]);
-  if (BBB_Terrain.IsWaterAt(spot) || Math.AbsFloat(spot[1] - point[1]) > 1.5) { s_sWhyNot = "the verge is water or too steep"; return false; }
+  if (ahead <= 0) ahead = SPOT_AHEAD_M;
+  vector middle = point + dir * ahead;
+  string why;
+  for (int option = 0; option < 3; option++)
+  {
+   float offset = width * 0.5 + VERGE_M;
+   string where = "verge";
+   if (option == 1) { offset = width * 0.5 + SHOULDER_M; where = "shoulder"; }
+   if (option == 2) { offset = Math.Max(0.5, width * 0.5 - EDGE_IN_M); where = "road edge"; }
+   if (!SpotClear(vehicle, at, middle, right, offset, option < 2, spot, why)) continue;
+   s_sWhere = where;
+   return true;
+  }
+  s_sWhyNot = why;
+  return false;
+ }
+
+ // The spot 'offset' m to the side of the road's middle: drivable out to it (when 'offRoad', the ground
+ // sampled every STEP_M), not water, nothing solid there or on the way.
+ protected static bool SpotClear(IEntity vehicle, vector at, vector middle, vector right, float offset, bool offRoad, out vector spot, out string why)
+ {
+  BaseWorld world = GetGame().GetWorld();
+  spot = middle + right * offset;
+  spot[1] = world.GetSurfaceY(spot[0], spot[2]);
+  if (BBB_Terrain.IsWaterAt(spot)) { why = "the verge is water"; return false; }
+  if (offRoad)
+  {
+   float last = world.GetSurfaceY(middle[0], middle[2]);
+   for (float s = STEP_M; s <= offset + 0.01; s += STEP_M)
+   {
+    vector p = middle + right * s;
+    float y = world.GetSurfaceY(p[0], p[2]);
+    if (Math.AbsFloat(y - last) > STEP_RISE_M) { why = "a ditch or a bank on the way to the verge"; return false; }
+    last = y;
+   }
+  }
   BBB_PullOverObstacles obstacles = new BBB_PullOverObstacles();
   obstacles.m_Self = vehicle;
   GetGame().GetWorld().QueryEntitiesBySphere(spot + Vector(0, 1, 0), 3, obstacles.Add, null, EQueryEntitiesFlags.STATIC);
-  if (obstacles.m_bBlocked) { s_sWhyNot = "something solid on the verge: " + obstacles.m_sWhat; return false; }
+  if (obstacles.m_bBlocked) { why = "something solid on the verge: " + obstacles.m_sWhat; return false; }
   // From outside the hull: its crew, doors and wheels are entities of their own the trace would hit.
   vector toSpot = spot - at;
   toSpot[1] = 0;
@@ -550,7 +591,7 @@ class BBB_PullOver : Managed
   trace.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
   trace.Exclude = vehicle;
   float fraction = GetGame().GetWorld().TraceMove(trace, null);
-  if (fraction < 0.98) { s_sWhyNot = "the way to the verge is blocked (" + BBB_Traffic.Name(trace.TraceEnt) + ")"; return false; }
+  if (fraction < 0.98) { why = "the way to the verge is blocked (" + BBB_Traffic.Name(trace.TraceEnt) + ")"; return false; }
   return true;
  }
 
@@ -629,24 +670,21 @@ class BBB_PullOver : Managed
     car.SetPersistentHandBrake(false);
     if (sim.GetGear() <= neutral) sim.SetGear(neutral + 1);
     sim.SetClutch(1);
-    float steer = Math.Clamp(Math.Atan2(local[0], local[2]) * 1.8, -1, 1);
-    sim.SetSteering(steer);
+    float steer = Math.Clamp(Math.Atan2(local[0], local[2]) * 1.8, -STEER_MAX, STEER_MAX);
     if (elapsed >= m_fLogAt)
     {
      m_fLogAt = elapsed + 1000;
      PrintFormat("[BBB] TRAFFIC pull-over %1 t=%2 s: spot %3 m right, %4 m ahead; steer %5, %6 km/h, gear %7 (neutral %8)", BBB_Traffic.Name(vehicle), Math.Round(elapsed / 100) / 10, Math.Round(local[0] * 10) / 10, Math.Round(local[2] * 10) / 10, Math.Round(steer * 100) / 100, Math.Round(speed * 36) / 10, sim.GetGear(), neutral);
     }
-    // A walking pace onto the verge (35% throttle only crept at 1.5 km/h: srv:mannersgetout).
-    if (speed > 4.5) { sim.SetThrottle(0); sim.SetBreak(0.6, false); }
-    else if (speed < 2.5) { sim.SetThrottle(0.7); sim.SetBreak(0, false); }
-    else { sim.SetThrottle(0.3); sim.SetBreak(0, false); }
+    // A walking pace onto the verge, the wheel short of full lock (STEER_MAX).
+    if (speed > 4.5) BBB_Unstick.Drive(m_Driver, sim, 0, steer, 0.6);
+    else if (speed < 2.5) BBB_Unstick.Drive(m_Driver, sim, 0.7, steer, 0);
+    else BBB_Unstick.Drive(m_Driver, sim, 0.3, steer, 0);
     return true;
    }
   }
   // Stopped (or holding): brake.
-  sim.SetThrottle(0);
-  sim.SetSteering(0);
-  sim.SetBreak(1, false);
+  BBB_Unstick.Drive(m_Driver, sim, 0, 0, 1);
   if (m_iMode == MODE_PARK)
   {
    if (speed > 0.4) return true;
@@ -664,10 +702,7 @@ class BBB_PullOver : Managed
  {
   if (car && car.GetSimulation())
   {
-   VehicleWheeledSimulation sim = car.GetSimulation();
-   sim.SetThrottle(0);
-   sim.SetSteering(0);
-   sim.SetBreak(0, false);
+   BBB_Unstick.Drive(m_Driver, car.GetSimulation(), 0, 0, 0);
   }
   BBB_Unstick.ReleaseHorn(m_Driver);
   if (m_bParkedAI && m_Driver && BBB.IsAlive(m_Driver) && !BBB.PlayerOf(m_Driver))

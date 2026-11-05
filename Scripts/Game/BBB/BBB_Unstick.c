@@ -2,7 +2,11 @@
 // a tree or another vehicle with the throttle down. The host decides when a
 // vehicle is stuck (and what to do after); this does the manoeuvre: the driver's
 // AI is parked, the vehicle reverses with the wheel turned for a few seconds and
-// brakes, then the driver gets his AI back. Inputs are written every frame
+// brakes, then the driver gets his AI back. A vehicle still rolling forward (an
+// unarmed one backing away from an armed enemy ahead, BBB_Traffic) brakes to a
+// stop first: the gearbox refuses reverse at speed, and the reverse throttle
+// then drove it on in its forward gear (srv:mannersevade, 4 Nov: a truck at
+// 60 km/h sped up to 62 and passed 13 m from the BTR it was backing away from). Inputs are written every frame
 // (BBB.Frame): the vehicle controller drops inputs set less often.
 // The driver's horn is released too: an AI driver honking at a soldier in its way
 // keeps the horn pressed forever if its AI is parked mid-honk.
@@ -17,6 +21,8 @@ class BBB_Unstick : Managed
 {
  static const float REVERSE_MS = 3500;    // reversing, then a short brake
  static const float TOTAL_MS = 4300;
+ static const float ROLLING_SPEED = 1.5;     // m/s forward: brake to a stop before reversing
+ static const float BRAKE_MAX_MS = 6000;  // at most this long braking first
 
  protected static ref array<ref BBB_Unstick> s_Active;
  // Called by BBB_StaticInit at game start (static initializer budget: tools/check_static_init.py).
@@ -29,6 +35,7 @@ class BBB_Unstick : Managed
  ChimeraCharacter m_Driver;
  protected float m_fStart;
  protected float m_fSteer;
+ protected bool m_bBraking = true;   // still rolling forward: stop first (cleared once slow or after BRAKE_MAX_MS)
  protected bool m_bParkedAI; // only hand back an AI this parked (something else may have parked it)
  protected ref BBB_UnstickListener m_Listener;
 
@@ -49,6 +56,15 @@ class BBB_Unstick : Managed
   }
   ReleaseHorn(driver);
   s_Active.Insert(unstick);
+ }
+
+ // Throttle, wheel and brake for a parked driver's vehicle (written every frame: the vehicle controller
+ // drops inputs set less often).
+ static void Drive(ChimeraCharacter driver, VehicleWheeledSimulation sim, float throttle, float steer, float brake)
+ {
+  sim.SetThrottle(throttle);
+  sim.SetSteering(steer);
+  sim.SetBreak(brake, false);
  }
 
  // Let go of the horn (an AI parked mid-honk never releases it itself).
@@ -108,7 +124,7 @@ class BBB_Unstick : Managed
   // or a player taking the wheel would find it still backing out.
   CarControllerComponent car;
   if (vehicle) car = CarControllerComponent.Cast(vehicle.FindComponent(CarControllerComponent));
-  if (!alive || !car || !car.GetSimulation() || elapsed > TOTAL_MS)
+  if (!alive || !car || !car.GetSimulation() || (!m_bBraking && elapsed > TOTAL_MS))
   {
    End(car);
    return false;
@@ -121,18 +137,28 @@ class BBB_Unstick : Managed
   ReleaseHorn(m_Driver);
   int neutral = sim.GearboxGearsCount() - sim.GearboxForwardGearsCount() - 1;
   sim.SetClutch(1);
+  // Rolling forward: brake to a stop first; the reverse's time starts once it is slow.
+  if (m_bBraking)
+  {
+   float forward;
+   if (physics) forward = vector.Dot(physics.GetVelocity(), vehicle.GetTransformAxis(2));
+   if (forward > ROLLING_SPEED && elapsed < BRAKE_MAX_MS)
+   {
+    Drive(m_Driver, sim, 0, 0, 1);
+    return true;
+   }
+   m_bBraking = false;
+   m_fStart = GetGame().GetWorld().GetWorldTime();
+   elapsed = 0;
+  }
   if (elapsed <= REVERSE_MS)
   {
    if (sim.GetGear() >= neutral) sim.SetGear(neutral - 1);
-   sim.SetBreak(0, false);
-   sim.SetThrottle(0.7);
-   sim.SetSteering(m_fSteer);
+   Drive(m_Driver, sim, 0.7, m_fSteer, 0);
   }
   else
   {
-   sim.SetThrottle(0);
-   sim.SetSteering(0);
-   sim.SetBreak(1, false);
+   Drive(m_Driver, sim, 0, 0, 1);
   }
   return true;
  }
@@ -142,9 +168,7 @@ class BBB_Unstick : Managed
   if (car && car.GetSimulation())
   {
    VehicleWheeledSimulation sim = car.GetSimulation();
-   sim.SetThrottle(0);
-   sim.SetSteering(0);
-   sim.SetBreak(0, false);
+   Drive(m_Driver, sim, 0, 0, 0);
    int neutral = sim.GearboxGearsCount() - sim.GearboxForwardGearsCount() - 1;
    sim.SetGear(neutral + 1);
   }
