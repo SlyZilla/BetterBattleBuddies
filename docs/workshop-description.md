@@ -43,7 +43,7 @@ GET STARTED AND TUNE IT
 
 Enable BBB and start a scenario with AI, such as Conflict or Game Master. Multiplayer requires it on the server and joining clients. No other mod is required; ACE-specific features need ACE. Mission makers can add BBB as a dependency; standalone integration starts automatically.
 
-New in 0.1.7: a Battle Buddies tab in Settings. Every feature has a switch or slider with a short description. Save, share and export presets; BBB default and Vanilla (all off) are built in. Presets apply in singleplayer and games you host. Servers use -bbbPreset <name>; -bbb... launch parameters still win.
+Tune it in Settings > Battle Buddies: every feature has a switch or slider with a short description. Save, share and export presets; BBB default and Vanilla (all off) are built in. Presets apply in singleplayer and games you host. Servers use -bbbPreset <name>; -bbb... launch parameters still win.
 
 Hosts can use -bbbThink 1 and look at a soldier to see BBB's decisions (-bbbThink 2 also logs them).
 
@@ -55,4 +55,4 @@ Use #issues for BBB bugs and #suggestions for ideas. No GitHub account needed.
 GitHub alternative: https://github.com/propst-design/BetterBattleBuddies/issues
 Reports: include versions, scenario, mods, host/client role, steps and console.log/script.log.
 
-Directed and tested by Jacob; developed with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); original attribution and full credits are retained in LICENSE.md.
+Directed and tested by Jacob, co-developed by SlyZilla; built with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); original attribution and full credits are retained in LICENSE.md.

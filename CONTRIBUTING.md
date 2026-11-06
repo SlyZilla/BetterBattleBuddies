@@ -18,7 +18,7 @@ is handled by the maintainer.
 ## Get your own working copy
 
 Install Git, Arma Reforger and **Arma Reforger Tools** (Workbench) through Steam.
-Use the regular game/tools versions together. Python 3 is used for source checks.
+Use the regular (1.9) game/tools versions together. Python 3 is used for source checks.
 Fork [this repository](https://github.com/propst-design/BetterBattleBuddies) on GitHub, then run
 these commands from your Workbench `addons` directory (replace `YOUR-USERNAME`):
 
@@ -77,6 +77,19 @@ movement, seat occupancy or ammunition use, rather than counters alone.
 Preserve resource GUIDs, license notices and existing line endings. Keep changes
 focused and avoid unrelated formatting. Enforce Script must compile in Workbench;
 be careful with engine API signatures and avoid unsupported ternary expressions.
+Every feature has its own `-bbb...` switch, defined once in `Scripts/Game/BBB/BBB_Settings.c`
+with its group, default and plain-language help; that one entry is what the Settings tab,
+presets and launch parameters all read.
+
+Two Enforce Script traps catch most newcomers:
+
+- **Integer comparisons.** With an int on the left, `<` and `>=` compare in ints
+  (`6 >= 6.75` is true), and int / int divides in ints. Put the float first.
+- **Static initializer budget.** Every class-level static given a built value
+  (`= {}`, `= new ...`, `= Foo()`) and every `const` declared inside a function adds to one
+  engine function whose size is capped and shared by *every loaded mod*. Over the cap the game
+  fails to compile for players running big mod lists. Declare such statics bare and fill them
+  from the class's `BBB_InitStatics()` (listed in `BBB_StaticInit`).
 
 Install **Arma Reforger Server** through Steam. From the repository root:
 
@@ -101,12 +114,16 @@ Before submitting, stage only the intended files and check them:
 ```powershell
 git diff --cached --stat
 python tools/check_public_source.py
+python tools/check_enforce_numbers.py
+python tools/check_static_init.py
 git diff --cached --check
 ```
 
-The source check also runs on GitHub pull requests and pushes. It catches common
-private/generated files and recognizable sensitive text; it cannot replace a
-manual review or compile/test the game.
+All three checks also run on GitHub pull requests and pushes. The public-source check
+catches common private/generated files and recognizable sensitive text;
+`check_enforce_numbers.py` catches integer comparisons and divisions that silently drop the
+fraction; `check_static_init.py` catches new static initializers (see above). None of them
+replaces a manual review or compiles and tests the game.
 
 ## Submit a pull request
 

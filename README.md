@@ -18,11 +18,20 @@ medical assistance and vehicle handling in Arma Reforger. Use it independently
 in vanilla scenarios or as AC: Actual's required AI addon. BBB does not require
 AC: Actual and does not add a commander game mode.
 
+## Requirements
+
+- Arma Reforger. BBB needs only the base game: no other mod.
+- Arma Reforger **1.9**: `main` has the 1.9 fixes (AI drivers backing away and pulling over
+  work again); they reach Workshop with the next release after 0.1.7.
+- Optional: AC: Actual (which requires BBB), AiO Command Menu, ACE. Each works with BBB
+  but none is needed.
+
 ## Install and play
 
 1. Find **Better Battle Buddies** in Arma Reforger's Workshop, download it and enable it.
-2. Start a vanilla scenario such as Conflict or Game Master with AI present.
-3. For multiplayer, load BBB on the server and joining clients.
+2. Start a scenario with AI present, such as Conflict, Game Master or a mission of your own.
+   Without a host mod BBB starts by itself about 10 seconds into the mission.
+3. For multiplayer, load BBB on the server and on joining clients.
 
 The current Workshop release is **0.1.7**.
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
@@ -44,6 +53,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 - **Get low against heavy armor.** Soldiers caught without anti-armor weapons adopt low stances (crouch out to 450 m, prone within 120 m) to minimize profile when facing armored vehicles, while rocket specialists hold position to engage.
 - **Opportunistic combat rearming.** Soldiers running critically low on ammunition or lacking AT scavenge compatible magazines and rocket launchers from nearby casualties, retrying routes if interrupted.
 - **Specialist teams.** Machine gunners and AT gunners keep the assistant who carries their ammunition close; he hands ammunition across before the gun runs dry and takes up the launcher if the gunner falls (`-bbbSpecialistTeams 0` turns it off).
+- **Squad plans.** A squad pauses on first contact, then assaults when the odds are fair or holds and fights from cover when outnumbered, flanked or pinned; a squad held by a dug-in enemy fixes it and sends a team round the side, and one that loses contact searches where the enemy was last seen.
+- **Cover that faces the enemy.** A soldier only counts as in cover when the cover is between him and the enemy; one caught on an open road in a firefight moves off it, and a gunner on a dry static gun gets off and fights on foot.
+
+The README describes `main`; some of the behaviour above arrives on Workshop with the next
+release. [CHANGELOG.md](CHANGELOG.md) shows what is released and what is not yet.
 
 These behaviors remain subject to the game's AI, navigation, available equipment
 and current orders. They do not guarantee that every rescue, engagement or vehicle
@@ -51,12 +65,26 @@ recovery succeeds.
 
 ## Optional features and compatibility
 
-Combat, medical and vehicle features are enabled by default. Server owners can
-disable them individually with the options below. The optional Think panel stays
-off unless enabled. ACE is optional; ACE-dependent behaviour needs ACE loaded.
+Almost every feature is on by default. Every one has its own switch, so a server owner can
+turn off just the part that clashes with a mission or another mod. ACE is optional;
+ACE-dependent behaviour needs ACE loaded.
+
+A few features are **off by default** and must be switched on:
+
+| Option | What it adds |
+| --- | --- |
+| `-bbbHotAI 1` | Hot AI, spotting and fire timing: soldiers spot faster and keep their eyes when shot at, shoot sooner, fire longer bursts |
+| `-bbbHotVehicles 1` | Hot AI, gunners and vehicles: turret gunners get time to aim, hold their target, feel hits on their vehicle and use the main gun; a hit armed vehicle slows down |
+| `-bbbReturnFire 1` | A soldier shot at by an enemy he can't see fires a short burst back toward the shots |
+| `-bbbGiveWay 1` | Friendly AI vehicles on a collision course agree who gives way |
+| `-bbbEvadeArmour 1` | An unarmed vehicle that sees an armed enemy vehicle asks the host mod to drive it away (does nothing without a host mod that handles it) |
+
+A Game Master can also switch both Hot AI options for the rest of a mission: they are
+checkboxes in the Game Master's game settings.
 
 AC: Actual integrates through BBB's host hooks and manages its own commander,
 bases, logistics and vehicle-driving decisions. AiO Command Menu is optional.
+A player's or Game Master's explicit order always takes priority over BBB's own reactions.
 
 ### Settings tab and presets
 
@@ -86,12 +114,28 @@ which preset loaded (`[BBB] SETTINGS preset ...`).
 ### Server options
 
 Player control, explicit player/GM orders and host-mod policy take priority over
-autonomous features. Each option below accepts `0` to disable its feature.
-
-Server owners can disable features individually:
+autonomous features. Every option in the Settings tab is also a launch parameter (the
+tab's right-hand panel names it); the tab lists them all, in twelve groups. The ones
+server owners reach for most, each turning its feature off with `0`:
 
 | Option | What it disables |
 | --- | --- |
+| `-bbbVanilla 0` | BBB starting on its own without a host mod (BBB then only runs under a host mod such as AC: Actual) |
+| `-bbbTactic 0` | Squad plans: assault, hold, fix and flank, search |
+| `-bbbOrderLeash 0` | Keeping reactions inside the area and intent of an order |
+| `-bbbAimFixes 0` | All of BBB's aim changes (vanilla aim) |
+| `-bbbThreat 0` | All of BBB's suppression changes (vanilla suppression) |
+| `-bbbExplosionReflex 0` | Hitting the dirt as a blast wave arrives |
+| `-bbbRearm 0` | Rearming from fallen friendlies |
+| `-bbbSpecialistTeams 0` | Gunner and ammo-bearer teams |
+| `-bbbDrag 0` | Dragging casualties to cover |
+| `-bbbGunnerReplace 0` | Squadmates taking over an empty gunner seat |
+| `-bbbTacticalDismount 0` | Passengers dismounting from a vehicle slowing under fire |
+| `-bbbUnstick 0` | Stuck AI drivers reversing away; soldiers stepping off truck beds |
+| `-bbbHandbrake 0` | Handbrake on when an AI driver leaves (an empty vehicle rolls on a slope from 1.9) |
+| `-bbbGunWinchester 0` | A gunner leaving a static gun that is out of ammo |
+| `-bbbRoadExit 0` | Moving off an open road in a firefight |
+| `-bbbBios 0` | Soldier bios |
 | `-bbbFireManeuver 0` | Alternating covering fire and movement |
 | `-bbbFireCoverOrders 0` | Ordered covering fire alone; keeps the rest of fire and manoeuvre |
 | `-bbbCombatManeuver 0` | Combat repositioning |
@@ -121,6 +165,10 @@ Vehicle smoke needs supported fitted weapons. Driver alignment requires clear,
 level ground and is limited to 2.5 m, 20 degrees and eight seconds; armour reactions
 support a guarded short reverse for slow wheeled vehicles, not tracked driving.
 
+The **Vanilla AI** group sets the skill (`-bbbAISkill`) and spotting speed
+(`-bbbAIPerception`) every AI soldier spawns with; a host mod, Game Master or mission that
+sets a soldier's own skill still wins.
+
 Hosts and mission makers can enable `-bbbThink 1` and look at a soldier to see BBB's
 decisions and reasons for holding back. `-bbbThink 2` also writes notes to the
 server log. Leave the option unset to keep it off.
@@ -147,5 +195,7 @@ server and affected client logs when available. Screenshots or video also help,
 especially on consoles. Remove passwords, tokens, IP addresses and personal
 information before uploading logs. Missing logs do not prevent reporting a bug.
 
+Directed by **Jacob** ([propst-design](https://github.com/propst-design)), co-developed with
+**SlyZilla** ([SlyZilla](https://github.com/SlyZilla)).
 Extracted from AC: Actual on 15 October 2026. Licensed under APL-SA; see
 [LICENSE.md](LICENSE.md) for the retained original attribution and project credits.
