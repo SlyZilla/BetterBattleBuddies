@@ -18,6 +18,12 @@
 //    (BBB_OrderIntent.Blocks), never affects player-controlled squads or vehicles,
 //    and respects host hooks (BBB.s_Hooks.AllowMorale). Never invents positions
 //    or references ACA classes.
+// 5. Ordered fall-back (-bbbWithdrawOrder): when the host's intent is WITHDRAW (BBB_Hooks.Intent:
+//    a destination and an arrival radius) and the squad is in contact, the same covered halves
+//    bound toward that spot instead of straight away from the enemy, until it arrives, it stalls,
+//    or the host changes its mind. With nobody in sight both halves run for it (the enemy can still
+//    be firing from out of sight: on the host's order alone the squad went to ground again).
+//    AllowMorale doesn't gate it: the host asked for it. A squad falling back never breaks.
 
 class BBB_GroupMoraleState : Managed
 {
@@ -45,6 +51,13 @@ class BBB_GroupMoraleState : Managed
 	string m_sEndReason;
 	ref array<ref BBB_AIWithdrawMove> m_aMoves = {}; // the moving half's run to m_vWithdrawPos
 	IEntity m_Leader;               // last leader seen up
+	bool m_bOrdered;                // this withdrawal is the host's fall-back (intent WITHDRAW), not a break
+	bool m_bOrderedNow;             // the host's intent at the last look was WITHDRAW
+	vector m_vOrderDest;            // where the host wants the squad
+	float m_fOrderRadius;           // how close to it counts as there
+	float m_fNextOrderCheck;        // next look at the host's intent (s)
+	float m_fNextOrderTry;          // next try at starting the ordered bounds (s)
+	bool m_bRunAll;                 // ordered, nobody in sight: the whole squad runs, nobody covers
 	float m_fLeaderLostAt;          // when he went down (s); counts as leader loss while the squad reorganises
 }
 
@@ -85,6 +98,8 @@ class BBB_Morale
 	static float s_fBreakScore = 0.70; // tests may lower it
 	static float s_fRetrogradeBoundDist = 25.0;
 	static float s_fMaxWithdrawDist = 90.0;
+	static bool s_bOrderedOn = true;
+	static float s_fOrderedBoundDist = 40.0; // longer than a break's bounds: the squad has somewhere to be
 
 	// Internal timing constants
 	static const float CHECK_INTERVAL_MS = 1500;
@@ -98,6 +113,10 @@ class BBB_Morale
 	static const float WITHDRAW_COOLDOWN_S = 60.0;  // after a withdrawal ends, before another may start
 	static const float MOVE_PRIORITY = 91;
 	static const float LEADER_REORG_S = 45.0;      // a fallen leader still counts this long after a new one is named
+	static const float ORDER_CHECK_S = 1.5;        // how often the host's intent is read per squad
+	protected static float s_fNextIdleProbe;       // next read for the squads with morale off (bare: static-init budget)
+	static const float ORDER_RETRY_S = 5.0;        // an ordered fall-back may bound again this soon after one ends
+	static const float ORDER_THREAT_S = 30.0;      // an ordered fall-back keeps bounding while the enemy was seen this recently
 
 	// State tracking
 	protected static ref array<ref BBB_GroupMoraleState> s_States;
@@ -121,6 +140,7 @@ class BBB_Morale
 	static int s_iWithdrawalBounds;
 	static int s_iContactsBroken;
 	static int s_iSurrenders;
+	static int s_iOrderedStarted;
 
 	static void Read()
 	{
@@ -157,6 +177,8 @@ class BBB_Morale
 
 		if (BBB_Settings.Get("bbbMoraleBreak", value)) s_fBreakScore = Math.Clamp(value.ToFloat(), 0.3, 1.0);
 		if (BBB_Settings.Get("bbbMoraleWithdraw", value)) s_fMaxWithdrawDist = Math.Clamp(value.ToFloat(), 30.0, 250.0);
+		if (BBB_Settings.Get("bbbWithdrawOrder", value)) s_bOrderedOn = value != "0";
+		if (BBB_Settings.Get("bbbWithdrawOrderBound", value)) s_fOrderedBoundDist = Math.Clamp(value.ToFloat(), 20.0, 60.0);
 
 		PrintFormat("[BBB] MORALE enabled=%1 surrender=%2 casualtyThreshold=%3", s_bOn, s_bSurrenderOn, s_fCasualtyThreshold);
 	}
@@ -170,9 +192,33 @@ class BBB_Morale
 	// Host or other modules can query if a group is currently breaking contact.
 	static bool IsWithdrawing(SCR_AIGroup group)
 	{
-		if (!group || !s_bOn) return false;
+		if (!group || (!s_bOn && !s_bOrderedOn)) return false;
 		BBB_GroupMoraleState state = s_mStateOf.Get(group);
 		return state && state.m_bWithdrawing;
+	}
+
+	// -bbbWithdrawOrder: covered bounds on the host's fall-back order (hosts gate their half on it too).
+	static bool OrderedOn()
+	{
+		Read();
+		return s_bOrderedOn;
+	}
+
+	// Bounding back on the host's fall-back order (not a morale break).
+	static bool IsOrdered(SCR_AIGroup group)
+	{
+		if (!IsWithdrawing(group)) return false;
+		BBB_GroupMoraleState state = s_mStateOf.Get(group);
+		return state && state.m_bOrdered;
+	}
+
+	// The host wants this squad to fall back (BBB_EIntent.WITHDRAW): where to, and how close counts.
+	static bool OrderedTo(SCR_AIGroup group, out vector destination, out float radius)
+	{
+		radius = 0;
+		if (!group || BBB_HostIntent.Of(group, destination, radius) != BBB_EIntent.WITHDRAW) return false;
+		radius = Math.Max(radius, 5.0);
+		return true;
 	}
 
 	// The squad's current (or last) withdrawal: the threat it backs away from and its bound end.
@@ -514,13 +560,15 @@ class BBB_Morale
 		return gain;
 	}
 
-	protected static void EndWithdrawal(BBB_GroupMoraleState state, float now, bool contactBroken, string reason, float threatDist)
+	protected static void EndWithdrawal(BBB_GroupMoraleState state, float now, bool contactBroken, string reason, float threatDist, float cooldown = WITHDRAW_COOLDOWN_S)
 	{
 		CancelMoves(state);
 		state.m_bWithdrawing = false;
 		state.m_bContactBroken = contactBroken;
+		if (state.m_bOrdered) reason = "ordered fall-back, " + reason;
+		state.m_bOrdered = false;
 		state.m_sEndReason = reason;
-		state.m_fNextWithdrawAllowed = now + WITHDRAW_COOLDOWN_S;
+		state.m_fNextWithdrawAllowed = now + cooldown;
 		if (contactBroken) s_iContactsBroken++;
 		PrintFormat("[BBB] MORALE: Squad %1 ended withdrawal (%2, contact broken=%3, withdrawn=%4 m, threat dist=%5 m)",
 			BBB.s_Hooks.NameOf(state.m_Group), reason, contactBroken, Math.Round(state.m_fTotalWithdrawn), Math.Round(threatDist));
@@ -552,6 +600,69 @@ class BBB_Morale
 			BBB_Think.NoteGroup(state.m_Group, "Morale", "MORALE BROKE (score " + state.m_fMorale.ToString(4, 2) + "): withdrawing");
 
 		ExecuteBoundingPhase(state);
+	}
+
+	// A point 100 m behind the squad on the line away from dest: ordered bounds "back away" from it,
+	// so GainAway measures progress toward dest and the retrograde helper aims at dest.
+	static vector BehindOf(vector from, vector dest)
+	{
+		vector dir = dest - from;
+		dir[1] = 0;
+		if (dir.LengthSq() < 0.01) return from;
+		dir.Normalize();
+		return from - dir * 100.0;
+	}
+
+	// The threat an ordered fall-back bounds away under: sightings up to 30 s old. With a break's
+	// 15 s the bounds ended 47 m out while the enemy, out of sight for a moment, still fired (fallback test).
+	protected static bool OrderedThreat(SCR_AIGroup group, out vector threat)
+	{
+		if (BBB_Squad.On(group)) return BBB_Squad.Threat(group, ORDER_THREAT_S, threat);
+		return GetThreatCentroid(group, threat);
+	}
+
+	// The next ordered bound's end: one bound toward the host's spot (round water), or the spot itself.
+	protected static vector OrderedBound(BBB_GroupMoraleState state, vector squadCenter)
+	{
+		if (vector.DistanceXZ(squadCenter, state.m_vOrderDest) <= s_fOrderedBoundDist) return BBB.Ground(state.m_vOrderDest);
+		return CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fOrderedBoundDist);
+	}
+
+	// The host's fall-back under fire: covered halves bound toward its spot. Out of contact the
+	// host's own order moves the squad; this starts only with a threat inside contact range, and
+	// once started runs to the spot (both halves while nobody is in sight).
+	protected static bool StartOrdered(BBB_GroupMoraleState state, float now)
+	{
+		vector squadCenter;
+		if (!SquadCenter(state.m_Group, squadCenter)) return false;
+		if (vector.DistanceXZ(squadCenter, state.m_vOrderDest) <= state.m_fOrderRadius) return false;
+		vector threatCenter;
+		if (!OrderedThreat(state.m_Group, threatCenter) || vector.DistanceXZ(squadCenter, threatCenter) >= BREAK_CONTACT_DIST_M) return false;
+
+		state.m_bOrdered = true;
+		state.m_vThreatCenter = threatCenter;
+		state.m_vEscapeDir = vector.Zero;
+		state.m_vAwayFrom = BehindOf(squadCenter, state.m_vOrderDest);
+		state.m_vWithdrawPos = OrderedBound(state, squadCenter);
+		state.m_bWithdrawing = true;
+		state.m_fBrokenSince = now;
+		state.m_fPhaseSince = now;
+		state.m_fTotalWithdrawn = 0;
+		state.m_bContactBroken = false;
+		state.m_iStalledBounds = 0;
+		state.m_sEndReason = "";
+		state.m_iPhase = 0;
+		state.m_iCoverTeam = 0;
+		state.m_bRunAll = false;
+
+		s_iOrderedStarted++;
+		PrintFormat("[BBB] MORALE: Squad %1 falls back on orders under fire, %2 m to go (threat %3 m), bounding to %4",
+			BBB.s_Hooks.NameOf(state.m_Group), Math.Round(vector.DistanceXZ(squadCenter, state.m_vOrderDest)), Math.Round(vector.DistanceXZ(squadCenter, threatCenter)), state.m_vWithdrawPos);
+		BBB_Think.NoteGroup(state.m_Group, "Morale", "falling back on orders: covered bounds");
+
+		ExecuteBoundingPhase(state);
+		if (!state.m_bWithdrawing) state.m_bOrdered = false;
+		return state.m_bWithdrawing;
 	}
 
 	protected static void ExecuteBoundingPhase(BBB_GroupMoraleState state)
@@ -595,9 +706,10 @@ class BBB_Morale
 		// Split into two logical elements for bounding overwatch; a lone survivor just runs
 		int half = consciousMembers.Count() / 2;
 		if (half == 0) half = 1;
-		if (consciousMembers.Count() == 1)
+		// A lone survivor, or an ordered fall-back with nobody in sight: everyone runs
+		if (consciousMembers.Count() == 1 || (state.m_bOrdered && state.m_bRunAll))
 		{
-			state.m_TeamMove.Insert(consciousMembers[0]);
+			state.m_TeamMove.InsertAll(consciousMembers);
 			consciousMembers.Clear();
 		}
 
@@ -675,29 +787,51 @@ class BBB_Morale
 		else state.m_iStalledBounds = 0;
 		state.m_iPhase++;
 		state.m_fPhaseSince = now;
+		if (state.m_bOrdered && vector.DistanceXZ(squadCenter, state.m_vOrderDest) <= state.m_fOrderRadius)
+		{
+			EndWithdrawal(state, now, false, "arrived", 0, ORDER_RETRY_S);
+			return;
+		}
 
 		vector threatCenter;
-		bool hasThreat = GetThreatCentroid(state.m_Group, threatCenter);
+		bool hasThreat;
+		if (state.m_bOrdered) hasThreat = OrderedThreat(state.m_Group, threatCenter);
+		else hasThreat = GetThreatCentroid(state.m_Group, threatCenter);
 		float currentDistToThreat = 0;
 		if (hasThreat) currentDistToThreat = vector.DistanceXZ(squadCenter, threatCenter);
 
+		// An ordered fall-back goes on to its spot: in sight of the enemy in covering halves, out of
+		// sight all together (it ends on arrival, a stall or the host's word).
+		float cooldown = WITHDRAW_COOLDOWN_S;
+		if (state.m_bOrdered)
+		{
+			cooldown = ORDER_RETRY_S;
+			state.m_bRunAll = !hasThreat || currentDistToThreat >= BREAK_CONTACT_DIST_M;
+			if (!hasThreat) threatCenter = state.m_vThreatCenter; // last seen: smoke and the log stay on a real sighting
+			hasThreat = true;
+			currentDistToThreat = 0;
+		}
 		// Contact is broken only by real separation or by losing the enemy after real movement
 		if (hasThreat && currentDistToThreat >= BREAK_CONTACT_DIST_M)
 		{
-			EndWithdrawal(state, now, true, "out of range", currentDistToThreat);
+			EndWithdrawal(state, now, true, "out of range", currentDistToThreat, cooldown);
 			return;
 		}
 		if (!hasThreat)
 		{
-			EndWithdrawal(state, now, state.m_fTotalWithdrawn >= s_fRetrogradeBoundDist * 0.5, "enemy no longer perceived", 0);
+			EndWithdrawal(state, now, state.m_fTotalWithdrawn >= s_fRetrogradeBoundDist * 0.5, "enemy no longer perceived", 0, cooldown);
 			return;
 		}
+		// Stalled on orders: the host sees no progress either and decides (smoke, a forced move).
+		// A stalled break keeps its old cooldown.
 		if (state.m_iStalledBounds >= MAX_STALLED_BOUNDS)
 		{
-			EndWithdrawal(state, now, false, "stalled", currentDistToThreat);
+			float stallCooldown = cooldown;
+			if (state.m_bOrdered) stallCooldown = cooldown * 3;
+			EndWithdrawal(state, now, false, "stalled", currentDistToThreat, stallCooldown);
 			return;
 		}
-		if (state.m_fTotalWithdrawn >= s_fMaxWithdrawDist)
+		if (!state.m_bOrdered && state.m_fTotalWithdrawn >= s_fMaxWithdrawDist)
 		{
 			EndWithdrawal(state, now, false, "max distance", currentDistToThreat);
 			return;
@@ -706,8 +840,16 @@ class BBB_Morale
 		// Continue withdrawal: swap roles and bound again
 		state.m_iCoverTeam = 1 - state.m_iCoverTeam;
 		state.m_vThreatCenter = threatCenter;
-		state.m_vAwayFrom = AwayFrom(state, squadCenter, threatCenter);
-		state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
+		if (state.m_bOrdered)
+		{
+			state.m_vAwayFrom = BehindOf(squadCenter, state.m_vOrderDest);
+			state.m_vWithdrawPos = OrderedBound(state, squadCenter);
+		}
+		else
+		{
+			state.m_vAwayFrom = AwayFrom(state, squadCenter, threatCenter);
+			state.m_vWithdrawPos = CalculateRetrogradeDestination(squadCenter, state.m_vAwayFrom, s_fRetrogradeBoundDist);
+		}
 
 		ExecuteBoundingPhase(state);
 	}
@@ -807,7 +949,7 @@ class BBB_Morale
 	static void Tick()
 	{
 		Read();
-		if (!s_bOn) return;
+		if (!s_bOn && !s_bOrderedOn) return;
 
 		float now = GetGame().GetWorld().GetWorldTime() / 1000.0;
 
@@ -841,16 +983,32 @@ class BBB_Morale
 			}
 		}
 
+		// Squads with morale off are asked for the host's order only every ORDER_CHECK_S, all at once:
+		// the host's lookup per squad made it every squad times every squad each second (review, 5 Nov).
+		// (A next time further off than one period is a previous mission's clock: read now.)
+		bool probeIdle = now >= s_fNextIdleProbe || s_fNextIdleProbe - now > ORDER_CHECK_S;
+		if (probeIdle) s_fNextIdleProbe = now + ORDER_CHECK_S;
 		foreach (SCR_AIGroup group : groups)
 		{
 			if (!group) continue;
 			// Not ours to manage (a player's squad, the host's call, mounted): a withdrawal under way
 			// is ended, or its covering half held ground and the squad read as withdrawing for good
 			// (fire and manoeuvre, buildings, rearm, statics and launchers all stand back for that).
-			if (BBB.HasPlayer(group) || !BBB.s_Hooks.AllowMorale(group) || BBB_Transport.CrewedVehicle(group))
+			// The host's fall-back order (intent WITHDRAW) isn't a morale break: AllowMorale doesn't gate it.
+			bool moraleAllowed = s_bOn && BBB.s_Hooks.AllowMorale(group);
+			if (BBB.HasPlayer(group) || BBB_Transport.CrewedVehicle(group) || (!moraleAllowed && !s_bOrderedOn))
 			{
 				DropWithdrawal(group, now);
 				continue;
+			}
+			// Morale is off for this squad: it is ours only once the host orders it back. Until then
+			// it gets no state (no casualty baseline, no state slot), exactly as without the option.
+			if (!moraleAllowed && !s_mStateOf.Get(group))
+			{
+				if (!probeIdle) continue;
+				vector orderDest;
+				float orderRadius;
+				if (!OrderedTo(group, orderDest, orderRadius)) continue;
 			}
 
 			array<AIAgent> agents = {};
@@ -860,12 +1018,33 @@ class BBB_Morale
 			BBB_GroupMoraleState state = GetOrCreateState(group, agents.Count());
 			if (!state) continue;
 
+			if (!s_bOrderedOn) state.m_bOrderedNow = false;
+			else if (now >= state.m_fNextOrderCheck)
+			{
+				state.m_fNextOrderCheck = now + ORDER_CHECK_S;
+				state.m_bOrderedNow = OrderedTo(group, state.m_vOrderDest, state.m_fOrderRadius);
+			}
+
 			// Active withdrawal update
 			if (state.m_bWithdrawing)
 			{
-				UpdateWithdrawal(state, now);
+				if (state.m_bOrdered && !state.m_bOrderedNow) EndWithdrawal(state, now, false, "the host's order changed", 0, ORDER_RETRY_S);
+				else if (!state.m_bOrdered && !moraleAllowed) DropWithdrawal(group, now);
+				else UpdateWithdrawal(state, now);
 				continue;
 			}
+
+			// Falling back on orders: bound when under fire; the squad is leaving anyway, so no break.
+			if (state.m_bOrderedNow)
+			{
+				if (now >= state.m_fNextWithdrawAllowed && now >= state.m_fNextOrderTry)
+				{
+					state.m_fNextOrderTry = now + ORDER_CHECK_S;
+					StartOrdered(state, now);
+				}
+				continue;
+			}
+			if (!moraleAllowed) continue;
 
 			// Throttled assessment
 			if (now < state.m_fNextCheck) continue;

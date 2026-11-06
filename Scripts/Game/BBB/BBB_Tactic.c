@@ -488,7 +488,13 @@ class BBB_Tactic
   SCR_AIGroup group = state.m_Group;
   // A player or GM order on anyone: the squad is theirs.
   if (OrderHeld(group)) { if (s_bStats) StatMark(group, STAT_ORDER); Drop(group, "player/GM order"); return; }
-  if (BBB_Morale.IsWithdrawing(group)) { Set(state, WITHDRAW, now, LOOK_S * 2, "morale broke", vector.Zero); return; }
+  if (BBB_Morale.IsWithdrawing(group))
+  {
+   string withdrawWhy = "morale broke";
+   if (BBB_Morale.IsOrdered(group)) withdrawWhy = "falling back on orders";
+   Set(state, WITHDRAW, now, LOOK_S * 2, withdrawWhy, vector.Zero);
+   return;
+  }
   vector threat;
   bool flanked;
   int enemies;
