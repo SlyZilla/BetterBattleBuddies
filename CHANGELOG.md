@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.8 — unreleased
+## 0.1.9 — unreleased
+
+## 0.1.8 — released
 
 - Works with Arma Reforger 1.9. In 1.9 the game's automatic gearbox takes the gear and throttle from the driver's own controls every moment, so whenever Better Battle Buddies drove a vehicle for its AI driver (backing a truck away from an incoming rocket or an armed vehicle, backing a stuck vehicle out, pulling over onto the verge) the game put it straight back in neutral: the truck sat still or crept forward. Better Battle Buddies now takes the driver's controls for the few seconds it drives and hands them back as soon as it's done.
 - Loads with long mod lists. Every loaded mod shares one engine limit on the script set-up that runs as the game loads, and with a big stack (ACE, a content pack, AiO and more) it ran over and the game refused to load its scripts. Better Battle Buddies now does that set-up once the game has started instead, so it no longer counts against the limit.
