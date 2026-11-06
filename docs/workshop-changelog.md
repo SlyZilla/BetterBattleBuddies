@@ -15,6 +15,7 @@ NEW
 - Soldiers caught on a road in a firefight get off it into cover instead of lying on the tarmac.
 - Cover only counts when it is between a soldier and the enemy: no more men sheltering on the wrong side of the sandbags.
 - A gunner on an empty static gun gets off and fights with his rifle; he mans it again once it has ammo.
+- Covered fall-back for missions that use it: a squad its mission orders back under fire bounds back in two halves, one covering the other, instead of going prone where it stands. AC: Actual's Experimental tab switches it on; on its own it changes nothing.
 - Off by default, in the Battle Buddies settings tab: Hot AI (faster spotting and firing; sharper vehicle gunners), return fire at shooters you can't see, vehicles that give way to each other, and unarmed vehicles that get away from armour.
 
 BETTER
