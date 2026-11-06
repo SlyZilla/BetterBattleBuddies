@@ -55,4 +55,4 @@ Use #issues for BBB bugs and #suggestions for ideas. No GitHub account needed.
 GitHub alternative: https://github.com/propst-design/BetterBattleBuddies/issues
 Reports: include versions, scenario, mods, host/client role, steps and console.log/script.log.
 
-Directed and tested by Jacob; developed with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); original attribution and full credits are retained in LICENSE.md.
+Directed and tested by Jacob, co-developed by SlyZilla; built with Claude, Codex and Antigravity. Extracted from AC: Actual. Arma Public License Share Alike (APL-SA); original attribution and full credits are retained in LICENSE.md.
